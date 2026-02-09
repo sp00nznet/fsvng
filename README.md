@@ -9,11 +9,25 @@
 ![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20Mac%20%7C%20Linux-lightgrey?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen?style=flat-square)
 
+<p align="center">
+  <img src="gfx/animated.gif" alt="fsvng in action" width="800">
+</p>
+
 ---
 
 ## What does it do?
 
 Point fsvng at any directory and watch it build a 3D visualization of your filesystem. Navigate through your files the way nature intended: by flying a camera through a city of colored blocks.
+
+<p align="center">
+  <img src="gfx/mapview.png" alt="MapV overview" width="800"><br>
+  <em>MapV — nested treemap showing directory structure as 3D boxes</em>
+</p>
+
+<p align="center">
+  <img src="gfx/mapview-exe.png" alt="MapV zoomed in" width="800"><br>
+  <em>Zoomed in — double-click to navigate into directories and inspect individual files</em>
+</p>
 
 **Three visualization modes:**
 
