@@ -100,41 +100,23 @@ void ViewportPanel::handleInput() {
         }
     }
 
-    // Left mouse drag - camera revolve (skip if this was a double-click frame)
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+    // Left mouse drag - camera revolve (uses ImGui delta to avoid double-click interference)
+    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
         !ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-        dragging_ = true;
-        lastMouseX_ = mousePos.x;
-        lastMouseY_ = mousePos.y;
-    }
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-        dragging_ = false;
-    }
-    if (dragging_ && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-        float dx = mousePos.x - lastMouseX_;
-        float dy = mousePos.y - lastMouseY_;
-        lastMouseX_ = mousePos.x;
-        lastMouseY_ = mousePos.y;
-
-        Camera::instance().revolve(dx * 0.3, dy * 0.3);
+        float dx = io.MouseDelta.x;
+        float dy = io.MouseDelta.y;
+        if (dx != 0.0f || dy != 0.0f) {
+            Camera::instance().revolve(dx * 0.3, dy * 0.3);
+        }
     }
 
     // Right mouse drag - camera pan
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-        rightDragging_ = true;
-        lastMouseX_ = mousePos.x;
-        lastMouseY_ = mousePos.y;
-    }
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
-        rightDragging_ = false;
-    }
-    if (rightDragging_ && ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-        float dx = mousePos.x - lastMouseX_;
-        float dy = mousePos.y - lastMouseY_;
-        lastMouseX_ = mousePos.x;
-        lastMouseY_ = mousePos.y;
-
-        Camera::instance().pan(dx, dy);
+    if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+        float dx = io.MouseDelta.x;
+        float dy = io.MouseDelta.y;
+        if (dx != 0.0f || dy != 0.0f) {
+            Camera::instance().pan(dx, dy);
+        }
     }
 
     // Scroll wheel - camera dolly
@@ -367,6 +349,21 @@ void ViewportPanel::drawDiscVLabels(const glm::mat4& viewProj, ImVec2 imgPos, Im
     if (!rootDir) return;
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    // Draw label for the root disc itself
+    GeometryManager& gm = GeometryManager::instance();
+    XYvec rootPos = gm.discvNodePos(rootDir);
+    glm::vec3 rootWorld(static_cast<float>(rootPos.x),
+                        static_cast<float>(rootPos.y), 0.0f);
+    float rcx, rcy;
+    if (projectToScreen(viewProj, rootWorld, imgPos, imgSize, rcx, rcy)) {
+        const char* name = rootDir->name.c_str();
+        ImVec2 textSize = ImGui::CalcTextSize(name);
+        float textX = rcx - textSize.x * 0.5f;
+        float textY = rcy - textSize.y * 0.5f;
+        drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), IM_COL32(0, 0, 0, 180), name);
+        drawList->AddText(ImVec2(textX, textY), IM_COL32(255, 255, 255, 220), name);
+    }
 
     drawDiscVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0);
 }

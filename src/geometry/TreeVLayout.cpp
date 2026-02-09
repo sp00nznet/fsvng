@@ -232,7 +232,8 @@ void TreeVLayout::init() {
     coreRadius_ = MIN_CORE_RADIUS;
 
     // Set up metanode as invisible center (depth=0)
-    metanode->treevGeom.platform.theta = 90.0;
+    // theta=0 because draw skips metanode, so its rotation shouldn't be in the chain
+    metanode->treevGeom.platform.theta = 0.0;
     metanode->treevGeom.platform.depth = 0.0;
     metanode->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
     metanode->treevGeom.platform.height = 0.0;

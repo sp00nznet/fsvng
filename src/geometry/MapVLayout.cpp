@@ -88,7 +88,7 @@ void MapVLayout::initRecursive(FsNode* dnode) {
 
     for (auto& childPtr : dnode->children) {
         FsNode* node = childPtr.get();
-        int64_t size = std::max(int64_t(256), node->size);
+        int64_t size = std::max(int64_t(4096), node->size);
         if (node->isDir())
             size += node->subtree.size;
         k = std::sqrt(static_cast<double>(size)) + nominalBorder;

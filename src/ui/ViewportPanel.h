@@ -49,9 +49,6 @@ private:
     int height_ = 600;
 
     bool dragging_ = false;
-    bool rightDragging_ = false;
-    float lastMouseX_ = 0.0f;
-    float lastMouseY_ = 0.0f;
 
     // Cached rendering state for hit testing
     glm::mat4 cachedViewProj_{1.0f};
