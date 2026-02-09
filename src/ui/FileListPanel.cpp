@@ -4,6 +4,7 @@
 
 #include "core/FsNode.h"
 #include "core/Types.h"
+#include "ui/MainWindow.h"
 
 namespace fsvng {
 
@@ -98,8 +99,11 @@ void FileListPanel::draw() {
             ImGui::TableSetColumnIndex(1);
             bool isSelected = (child.get() == selectedNode_);
             if (ImGui::Selectable(child->name.c_str(), isSelected,
-                                  ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) {
+                                  ImGuiSelectableFlags_SpanAllColumns |
+                                  ImGuiSelectableFlags_AllowDoubleClick |
+                                  ImGuiSelectableFlags_AllowOverlap)) {
                 selectedNode_ = child.get();
+                MainWindow::instance().navigateTo(child.get());
             }
 
             // Size column

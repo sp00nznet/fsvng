@@ -5,6 +5,7 @@
 #include "core/FsNode.h"
 #include "core/FsTree.h"
 #include "core/Types.h"
+#include "geometry/GeometryManager.h"
 
 #include <algorithm>
 #include <cmath>
@@ -79,8 +80,8 @@ void Camera::init(FsvMode mode, bool initialView) {
             }
             discvState().target.x = 0.0;
             discvState().target.y = 0.0;
-            cam.nearClip = 0.9375 * cam.distance;
-            cam.farClip = 1.0625 * cam.distance;
+            cam.nearClip = NEAR_TO_DISTANCE_RATIO * cam.distance;
+            cam.farClip = FAR_TO_NEAR_RATIO * cam.nearClip;
             break;
         }
 
@@ -220,11 +221,17 @@ double Camera::discvLookAt(FsNode* node, MorphType mtype, double panTimeOverride
     if (nodeRadius < EPSILON) nodeRadius = 100.0;
 
     double newDistance = 2.0 * fieldDistance(cam.fov, 2.0 * nodeRadius);
-    double newNearClip = 0.9375 * newDistance;
-    double newFarClip = 1.0625 * newDistance;
+    double newNearClip = NEAR_TO_DISTANCE_RATIO * newDistance;
+    double newFarClip = FAR_TO_NEAR_RATIO * newNearClip;
 
-    double targetX = node->discvGeom.pos.x;
-    double targetY = node->discvGeom.pos.y;
+    // Compute absolute disc position (sum of all ancestor positions)
+    double targetX = 0.0, targetY = 0.0;
+    FsNode* upNode = node;
+    while (upNode) {
+        targetX += upNode->discvGeom.pos.x;
+        targetY += upNode->discvGeom.pos.y;
+        upNode = upNode->parent;
+    }
 
     // Duration of pan
     double panTime;
@@ -419,12 +426,13 @@ double Camera::treevLookAt(FsNode* node, MorphType mtype, double panTimeOverride
     bool isLeaf = !node->isDir();  // Simplified leaf check
 
     if (isLeaf) {
-        // Leaf node
+        // Leaf node - use absolute platform coordinates from GeometryManager
         FsNode* parent = node->parent;
         if (!parent) parent = node;
 
-        double platformR0 = parent->treevGeom.platform.depth;  // Simplified
-        double platformTheta = parent->treevGeom.platform.theta;
+        auto& gm = GeometryManager::instance();
+        double platformR0 = gm.treevPlatformR0(parent);
+        double platformTheta = gm.treevPlatformTheta(parent);
 
         newTargetR = platformR0 + node->treevGeom.leaf.distance;
         newTargetTheta = platformTheta + node->treevGeom.leaf.theta;
@@ -437,11 +445,10 @@ double Camera::treevLookAt(FsNode* node, MorphType mtype, double panTimeOverride
         newNearClip = NEAR_TO_DISTANCE_RATIO * topDist;
         newFarClip = FAR_TO_NEAR_RATIO * newNearClip;
 
-        // Viewing angles
-        double relTheta = newTargetTheta - platformTheta;
+        // Viewing angles - relTheta is just the leaf's local theta
         double arcWidth = parent->treevGeom.platform.arc_width;
         if (std::abs(arcWidth) > EPSILON) {
-            newTheta = -15.0 * relTheta / arcWidth;
+            newTheta = -15.0 * node->treevGeom.leaf.theta / arcWidth;
         } else {
             newTheta = 0.0;
         }
@@ -458,9 +465,10 @@ double Camera::treevLookAt(FsNode* node, MorphType mtype, double panTimeOverride
             }
         }
     } else {
-        // Directory node (platform)
-        double platformR0 = 0.0;  // Simplified; real value from geometry
-        double platformTheta = node->treevGeom.platform.theta;
+        // Directory node (platform) - use absolute coordinates from GeometryManager
+        auto& gm = GeometryManager::instance();
+        double platformR0 = gm.treevPlatformR0(node);
+        double platformTheta = gm.treevPlatformTheta(node);
         double platformDepth = node->treevGeom.platform.depth;
 
         newTargetR = platformR0 + 0.3 * platformDepth - 0.2 * TREEV_PLATFORM_SPACING_DEPTH;
@@ -627,6 +635,7 @@ void Camera::treevLpanLookAt(FsNode* node, double panTimeOverride) {
 
     if (isLeaf && node->parent) {
         FsNode* parent = node->parent;
+        auto& gm = GeometryManager::instance();
         double arcWidth = parent->treevGeom.platform.arc_width;
         double leafTheta = node->treevGeom.leaf.theta;
         if (std::abs(arcWidth) > EPSILON) {
@@ -634,11 +643,12 @@ void Camera::treevLpanLookAt(FsNode* node, double panTimeOverride) {
         } else {
             newTheta = 0.0;
         }
-        newTargetR = node->treevGeom.leaf.distance;  // Simplified
-        newTargetTheta = parent->treevGeom.platform.theta + leafTheta;
+        newTargetR = gm.treevPlatformR0(parent) + node->treevGeom.leaf.distance;
+        newTargetTheta = gm.treevPlatformTheta(parent) + leafTheta;
     } else {
-        newTargetR = (2.0 - MAGIC_NUMBER) * node->treevGeom.platform.depth;
-        newTargetTheta = node->treevGeom.platform.theta;
+        auto& gm = GeometryManager::instance();
+        newTargetR = gm.treevPlatformR0(node) + (2.0 - MAGIC_NUMBER) * node->treevGeom.platform.depth;
+        newTargetTheta = gm.treevPlatformTheta(node);
         newTheta = -0.125 * (newTargetTheta - 90.0);
     }
 
@@ -892,14 +902,15 @@ void Camera::birdseyeView(bool goingUp) {
 glm::mat4 Camera::getViewMatrix() const {
     const CameraState& cam = state();
     glm::dvec3 eye, target, up;
-    up = glm::dvec3(0.0, 0.0, 1.0);
 
     switch (currentMode_) {
         case FSV_DISCV: {
-            // DiscV: orthographic-like top-down view
+            // DiscV: top-down view looking along -Z, so up must be (0,1,0) not (0,0,1)
+            // Using (0,0,1) as up when eye-target is along Z axis is degenerate (anti-parallel)
             const DiscVCameraState& dcam = discvState();
             target = glm::dvec3(dcam.target.x, dcam.target.y, 0.0);
             eye = glm::dvec3(dcam.target.x, dcam.target.y, cam.distance);
+            up = glm::dvec3(0.0, 1.0, 0.0);
             break;
         }
 
@@ -918,6 +929,7 @@ glm::mat4 Camera::getViewMatrix() const {
                 mcam.target.y + cam.distance * sinTheta * cosPhi,
                 mcam.target.z + cam.distance * sinPhi
             );
+            up = glm::dvec3(0.0, 0.0, 1.0);
             break;
         }
 
@@ -945,6 +957,7 @@ glm::mat4 Camera::getViewMatrix() const {
                 target.y + cam.distance * sinTheta * cosPhi,
                 target.z + cam.distance * sinPhi
             );
+            up = glm::dvec3(0.0, 0.0, 1.0);
             break;
         }
 
@@ -952,6 +965,7 @@ glm::mat4 Camera::getViewMatrix() const {
             // Fallback: look along -Z
             target = glm::dvec3(0.0, 0.0, 0.0);
             eye = glm::dvec3(0.0, 0.0, cam.distance);
+            up = glm::dvec3(0.0, 1.0, 0.0);
             break;
         }
     }

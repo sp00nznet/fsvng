@@ -2,7 +2,7 @@
 
 ### Your filesystem, but make it *three-dimensional*
 
-**fsvng** is a from-scratch C++17 rewrite of [fsv](http://fsv.sourceforge.net/), the legendary 1999 3D file system visualizer. Think of it as `ls` if `ls` went to architecture school, dropped out, and became a VJ.
+**fsvng** is a from-scratch C++17 rewrite of [fsv](http://fsv.sourceforge.net/), the legendary 1999 3D file system visualizer. It turns your directory listings into navigable 3D landscapes.
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square)
 ![OpenGL](https://img.shields.io/badge/OpenGL-3.3%20Core-green?style=flat-square)
@@ -62,10 +62,13 @@ cmake --build build --config Release
 | **Left drag** | Orbit camera |
 | **Right drag** | Pan camera |
 | **Scroll wheel** | Zoom in/out |
+| **W/S or Up/Down** | Dolly forward/back |
+| **A/D or Left/Right** | Strafe left/right |
+| **Q/E** | Move up/down |
+| **Double-click** | Navigate into directory / open file |
+| **Enter** | Expand/collapse current directory |
+| **Backspace** | Navigate back |
 | **Click tree panel** | Navigate to node |
-| **Toolbar: Back** | Go to previous node |
-| **Toolbar: CD Root** | Jump to root directory |
-| **Toolbar: CD Up** | Go to parent directory |
 | **Toolbar: Bird's Eye** | Toggle overhead view |
 
 ---

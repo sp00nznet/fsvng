@@ -33,6 +33,10 @@ public:
     void navigateBack();
     void navigateToRoot();
     void navigateUp();
+    void navigateToFirstChild();
+    void navigateToNextSibling();
+    void navigateToPrevSibling();
+    void toggleExpandCurrent();
 
     FsNode* getCurrentNode() const { return currentNode_; }
 

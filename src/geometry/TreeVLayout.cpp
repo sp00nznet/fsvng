@@ -151,23 +151,30 @@ void TreeVLayout::arrangeRecursive(FsNode* dnode, double r0, bool reshapeTree) {
 // ============================================================================
 
 void TreeVLayout::arrange(bool initialArrange) {
-    FsNode* root = FsTree::instance().root();
-    if (!root) return;
+    // Start from rootDir (skip metanode level so children fill the first ring)
+    FsNode* rootDir = FsTree::instance().rootDir();
+    if (!rootDir) return;
 
-    arrangeRecursive(root, coreRadius_, initialArrange);
+    double rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+    arrangeRecursive(rootDir, rootR0, initialArrange);
+    rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
 
     // Check that the tree's total arc width is within bounds
     for (;;) {
-        double subtreeArc = root->treevGeom.platform.subtree_arc_width;
+        double subtreeArc = rootDir->treevGeom.platform.subtree_arc_width;
         if (subtreeArc > MAX_ARC_WIDTH) {
             // Grow core radius
             coreRadius_ *= CORE_GROW_FACTOR;
-            arrangeRecursive(root, coreRadius_, true);
+            rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+            arrangeRecursive(rootDir, rootR0, true);
+            rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
         } else if (subtreeArc < MIN_ARC_WIDTH &&
-                   root->treevGeom.platform.depth > MIN_CORE_RADIUS) {
+                   coreRadius_ > MIN_CORE_RADIUS) {
             // Shrink core radius
             coreRadius_ = std::max(MIN_CORE_RADIUS, coreRadius_ / CORE_GROW_FACTOR);
-            arrangeRecursive(root, coreRadius_, true);
+            rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+            arrangeRecursive(rootDir, rootR0, true);
+            rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
         } else {
             break;
         }
@@ -224,19 +231,49 @@ void TreeVLayout::init() {
 
     coreRadius_ = MIN_CORE_RADIUS;
 
-    // Set up metanode platform params
+    // Set up metanode as invisible center (depth=0)
     metanode->treevGeom.platform.theta = 90.0;
     metanode->treevGeom.platform.depth = 0.0;
     metanode->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
     metanode->treevGeom.platform.height = 0.0;
+    metanode->deployment = 1.0;
 
-    // Set up root dir params
-    rootDir->treevGeom.leaf.theta = 0.0;
-    rootDir->treevGeom.leaf.distance = 0.5 * PLATFORM_SPACING_DEPTH;
+    // Set up rootDir as the effective center so its children fill the first ring.
+    // (Metanode always has exactly 1 child - rootDir - which wastes a ring level.)
     rootDir->treevGeom.platform.theta = 0.0;
+    rootDir->treevGeom.platform.height = 0.0;
+    rootDir->treevGeom.leaf.theta = 0.0;
+    rootDir->treevGeom.leaf.distance = 0.0;
+    rootDir->deployment = 1.0;
 
-    initRecursive(metanode);
-    arrange(true);
+    // Initialize from rootDir (skip metanode level)
+    initRecursive(rootDir);
+
+    // Arrange from rootDir - its r0 matches treevPlatformR0(rootDir)
+    double rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+    arrangeRecursive(rootDir, rootR0, true);
+
+    // Override rootDir's arc_width to fill the entire ring
+    rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
+
+    // Core radius adjustment loop
+    for (;;) {
+        double subtreeArc = rootDir->treevGeom.platform.subtree_arc_width;
+        if (subtreeArc > MAX_ARC_WIDTH) {
+            coreRadius_ *= CORE_GROW_FACTOR;
+            rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+            arrangeRecursive(rootDir, rootR0, true);
+            rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
+        } else if (subtreeArc < MIN_ARC_WIDTH &&
+                   coreRadius_ > MIN_CORE_RADIUS) {
+            coreRadius_ = std::max(MIN_CORE_RADIUS, coreRadius_ / CORE_GROW_FACTOR);
+            rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+            arrangeRecursive(rootDir, rootR0, true);
+            rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
+        } else {
+            break;
+        }
+    }
 
     // Store core radius in GeometryManager
     GeometryManager::instance().treevCoreRadius_ = coreRadius_;
@@ -982,9 +1019,8 @@ bool TreeVLayout::drawRecursive(FsNode* dnode, const glm::mat4& view,
 // ============================================================================
 
 void TreeVLayout::draw(const glm::mat4& view, const glm::mat4& projection, bool highDetail) {
-    FsTree& tree = FsTree::instance();
-    FsNode* root = tree.root();
-    if (!root) return;
+    FsNode* rootDir = FsTree::instance().rootDir();
+    if (!rootDir) return;
 
     GeometryManager& gm = GeometryManager::instance();
     gm.modelStack().loadIdentity();
@@ -992,28 +1028,27 @@ void TreeVLayout::draw(const glm::mat4& view, const glm::mat4& projection, bool 
     // Arrange if needed
     if (gm.lowDrawStage() == 0 || gm.highDrawStage() == 0) {
         arrange(false);
-        // Sync core radius
         gm.treevCoreRadius_ = coreRadius_;
     }
 
-    // Draw geometry with branches
-    drawRecursive(root, view, projection, 0.0, coreRadius_, true);
+    // Draw starting from rootDir (skip metanode so children fill first ring)
+    double rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+    drawRecursive(rootDir, view, projection, 0.0, rootR0, true);
 
     if (highDetail) {
-        // High detail: outlines, labels, cursor
         // Labels and cursor drawing deferred to TextRenderer integration
     }
 }
 
 void TreeVLayout::drawForPicking(const glm::mat4& view, const glm::mat4& projection) {
-    FsTree& tree = FsTree::instance();
-    FsNode* root = tree.root();
-    if (!root) return;
+    FsNode* rootDir = FsTree::instance().rootDir();
+    if (!rootDir) return;
 
     GeometryManager& gm = GeometryManager::instance();
     gm.modelStack().loadIdentity();
 
-    drawRecursive(root, view, projection, 0.0, coreRadius_, false);
+    double rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
+    drawRecursive(rootDir, view, projection, 0.0, rootR0, false);
 }
 
 } // namespace fsvng

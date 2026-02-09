@@ -23,12 +23,24 @@ private:
     ViewportPanel() = default;
     void createFBO(int width, int height);
     void handleInput();
+    void handleKeyboard();
 
     // MapV text label overlay
     void drawMapVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize);
     void drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
                                   ImVec2 imgPos, ImVec2 imgSize,
                                   ImDrawList* drawList, double zBase, int depth);
+
+    // DiscV text label overlay
+    void drawDiscVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize);
+    void drawDiscVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
+                                   ImVec2 imgPos, ImVec2 imgSize,
+                                   ImDrawList* drawList, int depth);
+
+    // Viewport hit testing
+    FsNode* hitTestMapV(float screenX, float screenY);
+    FsNode* hitTestMapVRecursive(FsNode* dnode, float screenX, float screenY,
+                                  double zBase, int depth);
 
     GLuint fbo_ = 0;
     GLuint colorTex_ = 0;
@@ -40,6 +52,12 @@ private:
     bool rightDragging_ = false;
     float lastMouseX_ = 0.0f;
     float lastMouseY_ = 0.0f;
+
+    // Cached rendering state for hit testing
+    glm::mat4 cachedViewProj_{1.0f};
+    ImVec2 imgPos_{0, 0};
+    ImVec2 imgSize_{0, 0};
+    bool hasScene_ = false;
 };
 
 } // namespace fsvng

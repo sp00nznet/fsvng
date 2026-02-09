@@ -21,6 +21,7 @@
 #include "color/ColorSystem.h"
 #include "renderer/Renderer.h"
 #include "geometry/GeometryManager.h"
+#include "geometry/CollapseExpand.h"
 #include "camera/Camera.h"
 
 namespace fsvng {
@@ -76,6 +77,11 @@ void MainWindow::navigateTo(FsNode* node) {
     DirTreePanel::instance().selectNode(node);
     if (node->isDir()) {
         FileListPanel::instance().showDirectory(node);
+
+        // Auto-expand the directory so its contents are visible in the 3D view
+        if (visualizationReady_ && !DirTreePanel::instance().isEntryExpanded(node)) {
+            CollapseExpand::instance().execute(node, ColExpAction::Expand);
+        }
     }
 
     // Point camera at the node
@@ -113,6 +119,46 @@ void MainWindow::navigateUp() {
     // Don't navigate to the metanode
     if (parent->isMetanode()) return;
     navigateTo(parent);
+}
+
+void MainWindow::navigateToFirstChild() {
+    if (!currentNode_ || currentNode_->children.empty()) return;
+    navigateTo(currentNode_->children[0].get());
+}
+
+void MainWindow::navigateToNextSibling() {
+    if (!currentNode_ || !currentNode_->parent) return;
+    auto& siblings = currentNode_->parent->children;
+    for (size_t i = 0; i < siblings.size(); ++i) {
+        if (siblings[i].get() == currentNode_) {
+            if (i + 1 < siblings.size()) {
+                navigateTo(siblings[i + 1].get());
+            }
+            return;
+        }
+    }
+}
+
+void MainWindow::navigateToPrevSibling() {
+    if (!currentNode_ || !currentNode_->parent) return;
+    auto& siblings = currentNode_->parent->children;
+    for (size_t i = 0; i < siblings.size(); ++i) {
+        if (siblings[i].get() == currentNode_) {
+            if (i > 0) {
+                navigateTo(siblings[i - 1].get());
+            }
+            return;
+        }
+    }
+}
+
+void MainWindow::toggleExpandCurrent() {
+    if (!currentNode_ || !currentNode_->isDir() || !visualizationReady_) return;
+    if (DirTreePanel::instance().isEntryExpanded(currentNode_)) {
+        CollapseExpand::instance().execute(currentNode_, ColExpAction::CollapseRecursive);
+    } else {
+        CollapseExpand::instance().execute(currentNode_, ColExpAction::Expand);
+    }
 }
 
 void MainWindow::setMode(FsvMode mode) {

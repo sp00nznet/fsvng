@@ -7,6 +7,11 @@
 #include <algorithm>
 #include <cmath>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 #include "ui/MainWindow.h"
 #include "renderer/Renderer.h"
 #include "geometry/GeometryManager.h"
@@ -72,8 +77,32 @@ void ViewportPanel::handleInput() {
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 mousePos = ImGui::GetMousePos();
 
-    // Left mouse drag - camera revolve
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    // Double-click: navigate to node under cursor or launch file
+    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hasScene_) {
+        FsNode* hit = nullptr;
+        FsvMode mode = MainWindow::instance().getMode();
+        if (mode == FSV_MAPV) {
+            hit = hitTestMapV(mousePos.x, mousePos.y);
+        }
+        if (hit) {
+            if (hit->isDir()) {
+                MainWindow::instance().navigateTo(hit);
+            } else {
+                // Non-directory: navigate to it and launch with OS default handler
+                MainWindow::instance().navigateTo(hit);
+#ifdef _WIN32
+                std::string path = hit->absName();
+                ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#endif
+            }
+            dragging_ = false;
+            return;
+        }
+    }
+
+    // Left mouse drag - camera revolve (skip if this was a double-click frame)
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+        !ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         dragging_ = true;
         lastMouseX_ = mousePos.x;
         lastMouseY_ = mousePos.y;
@@ -115,6 +144,49 @@ void ViewportPanel::handleInput() {
     }
 }
 
+void ViewportPanel::handleKeyboard() {
+    if (!ImGui::IsWindowFocused()) return;
+
+    // WASD / Arrow keys for doom-style camera movement (continuous while held)
+    float dollySpeed = 16.0f;
+    float panSpeed = 1.5f;
+
+    if (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_UpArrow)) {
+        Camera::instance().dolly(-dollySpeed);  // Forward = dolly in
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) {
+        Camera::instance().dolly(dollySpeed);   // Backward = dolly out
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_A) || ImGui::IsKeyDown(ImGuiKey_LeftArrow)) {
+        Camera::instance().pan(-panSpeed, 0.0);  // Strafe left
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_D) || ImGui::IsKeyDown(ImGuiKey_RightArrow)) {
+        Camera::instance().pan(panSpeed, 0.0);   // Strafe right
+    }
+
+    // Q/E for vertical movement
+    if (ImGui::IsKeyDown(ImGuiKey_Q)) {
+        Camera::instance().pan(0.0, -panSpeed);  // Move up
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_E)) {
+        Camera::instance().pan(0.0, panSpeed);   // Move down
+    }
+
+    // Enter: toggle expand/collapse current directory
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
+        MainWindow::instance().toggleExpandCurrent();
+    }
+
+    // Backspace: navigate back in history
+    if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+        MainWindow::instance().navigateBack();
+    }
+}
+
+// ============================================================================
+// MapV hit testing
+// ============================================================================
+
 // Helper: compute absolute z base for a MapV node (sum of all ancestor heights)
 static double mapvNodeZBase(FsNode* node) {
     double z = 0.0;
@@ -139,6 +211,59 @@ static bool projectToScreen(const glm::mat4& viewProj, const glm::vec3& worldPos
     sy = imgPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * imgSize.y;
     return true;
 }
+
+FsNode* ViewportPanel::hitTestMapV(float screenX, float screenY) {
+    FsNode* rootDir = FsTree::instance().rootDir();
+    if (!rootDir) return nullptr;
+
+    return hitTestMapVRecursive(rootDir, screenX, screenY, 0.0, 0);
+}
+
+FsNode* ViewportPanel::hitTestMapVRecursive(FsNode* dnode, float mx, float my,
+                                             double zBase, int depth) {
+    if (depth > 10) return nullptr;
+
+    double childZBase = zBase + dnode->mapvGeom.height;
+    FsNode* bestHit = nullptr;
+
+    for (auto& childPtr : dnode->children) {
+        FsNode* node = childPtr.get();
+
+        float z = static_cast<float>(childZBase + node->mapvGeom.height);
+
+        // Project top face corners to screen space
+        glm::vec3 c0World(static_cast<float>(node->mapvGeom.c0.x),
+                          static_cast<float>(node->mapvGeom.c0.y), z);
+        glm::vec3 c1World(static_cast<float>(node->mapvGeom.c1.x),
+                          static_cast<float>(node->mapvGeom.c1.y), z);
+
+        float sx0, sy0, sx1, sy1;
+        if (!projectToScreen(cachedViewProj_, c0World, imgPos_, imgSize_, sx0, sy0)) continue;
+        if (!projectToScreen(cachedViewProj_, c1World, imgPos_, imgSize_, sx1, sy1)) continue;
+
+        float minX = std::min(sx0, sx1);
+        float maxX = std::max(sx0, sx1);
+        float minY = std::min(sy0, sy1);
+        float maxY = std::max(sy0, sy1);
+
+        if (mx >= minX && mx <= maxX && my >= minY && my <= maxY) {
+            bestHit = node;
+
+            // Recurse into expanded directories for more specific hit
+            if (node->isDir() && !node->isCollapsed()) {
+                FsNode* deeper = hitTestMapVRecursive(node, mx, my,
+                                                       childZBase, depth + 1);
+                if (deeper) bestHit = deeper;
+            }
+        }
+    }
+
+    return bestHit;
+}
+
+// ============================================================================
+// MapV text label overlay
+// ============================================================================
 
 void ViewportPanel::drawMapVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize) {
     FsNode* rootDir = FsTree::instance().rootDir();
@@ -194,13 +319,95 @@ void ViewportPanel::drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& view
         // Only draw label if node projection is large enough
         if (screenSize < 30.0f) continue;
 
+        bool isExpandedDir = node->isDir() && !node->isCollapsed();
+
+        // For expanded directories, skip the parent label when children are visible
+        // (prevents parent name from covering child contents)
+        if (!isExpandedDir || screenSize < 150.0f) {
+            const char* name = node->name.c_str();
+            ImVec2 textSize = ImGui::CalcTextSize(name);
+
+            // Truncate text if wider than projected box
+            float maxTextWidth = screenW * 0.9f;
+            if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
+                // Draw with clipping
+                float textX = cx - maxTextWidth * 0.5f;
+                float textY = cy - textSize.y * 0.5f;
+                drawList->PushClipRect(
+                    ImVec2(textX, textY),
+                    ImVec2(textX + maxTextWidth, textY + textSize.y),
+                    true
+                );
+                drawList->AddText(ImVec2(textX, textY), IM_COL32(255, 255, 255, 220), name);
+                drawList->PopClipRect();
+            } else if (textSize.x <= maxTextWidth || screenSize > 60.0f) {
+                float textX = cx - textSize.x * 0.5f;
+                float textY = cy - textSize.y * 0.5f;
+
+                // Draw shadow for readability
+                drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), IM_COL32(0, 0, 0, 180), name);
+                drawList->AddText(ImVec2(textX, textY), IM_COL32(255, 255, 255, 220), name);
+            }
+        }
+
+        // Recurse into expanded directories
+        if (isExpandedDir) {
+            drawMapVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList,
+                                     childZBase, depth + 1);
+        }
+    }
+}
+
+// ============================================================================
+// DiscV text label overlay
+// ============================================================================
+
+void ViewportPanel::drawDiscVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize) {
+    FsNode* rootDir = FsTree::instance().rootDir();
+    if (!rootDir) return;
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    drawDiscVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0);
+}
+
+void ViewportPanel::drawDiscVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
+                                              ImVec2 imgPos, ImVec2 imgSize,
+                                              ImDrawList* drawList, int depth) {
+    if (depth > 4) return;
+
+    GeometryManager& gm = GeometryManager::instance();
+
+    for (auto& childPtr : dnode->children) {
+        FsNode* node = childPtr.get();
+
+        // Get absolute world position of this disc
+        XYvec absPos = gm.discvNodePos(node);
+        glm::vec3 worldPos(static_cast<float>(absPos.x),
+                           static_cast<float>(absPos.y), 0.0f);
+
+        // Project center to screen
+        float cx, cy;
+        if (!projectToScreen(viewProj, worldPos, imgPos, imgSize, cx, cy))
+            continue;
+
+        // Estimate screen size by projecting a point at the edge of the disc
+        float radius = static_cast<float>(node->discvGeom.radius);
+        glm::vec3 edgePos(static_cast<float>(absPos.x) + radius,
+                          static_cast<float>(absPos.y), 0.0f);
+        float ex, ey;
+        if (!projectToScreen(viewProj, edgePos, imgPos, imgSize, ex, ey))
+            continue;
+
+        float screenRadius = std::abs(ex - cx);
+        if (screenRadius < 15.0f) continue;
+
         const char* name = node->name.c_str();
         ImVec2 textSize = ImGui::CalcTextSize(name);
 
-        // Truncate text if wider than projected box
-        float maxTextWidth = screenW * 0.9f;
+        float maxTextWidth = screenRadius * 1.6f;
         if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
-            // Draw with clipping
+            // Clip text to disc width
             float textX = cx - maxTextWidth * 0.5f;
             float textY = cy - textSize.y * 0.5f;
             drawList->PushClipRect(
@@ -210,22 +417,25 @@ void ViewportPanel::drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& view
             );
             drawList->AddText(ImVec2(textX, textY), IM_COL32(255, 255, 255, 220), name);
             drawList->PopClipRect();
-        } else if (textSize.x <= maxTextWidth || screenSize > 60.0f) {
+        } else if (textSize.x <= maxTextWidth || screenRadius > 30.0f) {
             float textX = cx - textSize.x * 0.5f;
             float textY = cy - textSize.y * 0.5f;
 
-            // Draw shadow for readability
+            // Shadow for readability
             drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), IM_COL32(0, 0, 0, 180), name);
             drawList->AddText(ImVec2(textX, textY), IM_COL32(255, 255, 255, 220), name);
         }
 
         // Recurse into expanded directories
         if (node->isDir() && !node->isCollapsed()) {
-            drawMapVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList,
-                                     childZBase, depth + 1);
+            drawDiscVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList, depth + 1);
         }
     }
 }
+
+// ============================================================================
+// Main draw
+// ============================================================================
 
 void ViewportPanel::draw() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -246,10 +456,10 @@ void ViewportPanel::draw() {
         createFBO(newWidth, newHeight);
     }
 
-    // Store view/projection for label overlay
+    // Store view/projection for label overlay and hit testing
     glm::mat4 cachedView(1.0f);
     glm::mat4 cachedProj(1.0f);
-    bool hasScene = false;
+    hasScene_ = false;
 
     if (fbo_ != 0) {
         // Bind FBO and render the 3D scene into it
@@ -265,7 +475,7 @@ void ViewportPanel::draw() {
 
         // Render the scene if we have a tree loaded
         if (FsTree::instance().rootDir()) {
-            hasScene = true;
+            hasScene_ = true;
             Camera& cam = Camera::instance();
             float aspect = (height_ > 0) ? static_cast<float>(width_) / static_cast<float>(height_) : 1.0f;
             cachedView = cam.getViewMatrix();
@@ -293,22 +503,34 @@ void ViewportPanel::draw() {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         // Record image position before drawing it
-        ImVec2 imgPos = ImGui::GetCursorScreenPos();
+        imgPos_ = ImGui::GetCursorScreenPos();
+        imgSize_ = availSize;
+
+        // Cache view-projection matrix for hit testing
+        cachedViewProj_ = cachedProj * cachedView;
 
         // Display the FBO color texture as an ImGui image
         ImTextureID texId = (ImTextureID)(uintptr_t)(colorTex_);
         // Flip UV vertically because OpenGL textures are bottom-up
         ImGui::Image(texId, availSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
-        // Draw text labels overlay for MapV mode
-        if (hasScene && MainWindow::instance().getMode() == FSV_MAPV) {
+        // Draw text labels overlay
+        if (hasScene_) {
+            FsvMode mode = MainWindow::instance().getMode();
             glm::mat4 viewProj = cachedProj * cachedView;
-            drawMapVLabels(viewProj, imgPos, availSize);
+            if (mode == FSV_MAPV) {
+                drawMapVLabels(viewProj, imgPos_, imgSize_);
+            } else if (mode == FSV_DISCV) {
+                drawDiscVLabels(viewProj, imgPos_, imgSize_);
+            }
         }
     }
 
-    // Handle mouse input for camera control
+    // Handle mouse input for camera control and clicking
     handleInput();
+
+    // Handle keyboard navigation
+    handleKeyboard();
 
     ImGui::End();
 }
