@@ -1,0 +1,44 @@
+# Build output
+build/
+out/
+cmake-build-*/
+
+# IDE
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln
+*.vcxproj*
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local context (session resume)
+.claude-context.md
+.claude/
+
+# Dependencies (fetched at build time)
+_deps/
+
+# Compiled objects
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# Config
+nul
