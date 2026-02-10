@@ -20,7 +20,7 @@ public:
 
     static constexpr double CURVE_GRANULARITY = 15.0;
     static constexpr double LEAF_RANGE_ARC_WIDTH = 315.0;
-    static constexpr double LEAF_STEM_PROPORTION = 0.5;
+    static constexpr double LEAF_STEM_PROPORTION = 0.15;
 
 private:
     DiscVLayout() = default;

@@ -163,6 +163,11 @@ void ViewportPanel::handleKeyboard() {
     if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
         MainWindow::instance().navigateBack();
     }
+
+    // Escape: navigate up to parent directory
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        MainWindow::instance().navigateUp();
+    }
 }
 
 // ============================================================================
@@ -431,6 +436,107 @@ void ViewportPanel::drawDiscVLabelsRecursive(FsNode* dnode, const glm::mat4& vie
 }
 
 // ============================================================================
+// TreeV text label overlay
+// ============================================================================
+
+void ViewportPanel::drawTreeVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize) {
+    FsNode* rootDir = FsTree::instance().rootDir();
+    if (!rootDir) return;
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    drawTreeVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0);
+}
+
+void ViewportPanel::drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
+                                              ImVec2 imgPos, ImVec2 imgSize,
+                                              ImDrawList* drawList, int depth) {
+    if (depth > 4) return;
+
+    GeometryManager& gm = GeometryManager::instance();
+
+    // Get absolute cylindrical coords for this directory's platform
+    double platformR0 = gm.treevPlatformR0(dnode);
+    double platformTheta = gm.treevPlatformTheta(dnode);
+
+    // Draw labels for leaf children (files)
+    for (auto& childPtr : dnode->children) {
+        FsNode* node = childPtr.get();
+
+        float worldX, worldY, worldZ;
+
+        if (!node->isDir()) {
+            // Leaf node: absolute position from platform + leaf offsets
+            double r = platformR0 + node->treevGeom.leaf.distance;
+            double theta = platformTheta + node->treevGeom.leaf.theta;
+            double thetaRad = theta * 3.14159265358979323846 / 180.0;
+            worldX = static_cast<float>(r * std::cos(thetaRad));
+            worldY = static_cast<float>(r * std::sin(thetaRad));
+            worldZ = static_cast<float>(node->treevGeom.leaf.height);
+        } else {
+            // Directory node: center of platform
+            double childR0 = gm.treevPlatformR0(node);
+            double childTheta = gm.treevPlatformTheta(node);
+            double r = childR0 + 0.5 * node->treevGeom.platform.depth;
+            double thetaRad = childTheta * 3.14159265358979323846 / 180.0;
+            worldX = static_cast<float>(r * std::cos(thetaRad));
+            worldY = static_cast<float>(r * std::sin(thetaRad));
+            worldZ = static_cast<float>(node->treevGeom.platform.height * 0.5);
+        }
+
+        glm::vec3 worldPos(worldX, worldY, worldZ);
+
+        // Project to screen
+        float cx, cy;
+        if (!projectToScreen(viewProj, worldPos, imgPos, imgSize, cx, cy))
+            continue;
+
+        // Estimate screen size: project a point offset by the node's extent
+        float edgeOffset;
+        if (!node->isDir()) {
+            edgeOffset = 128.0f; // half of LEAF_NODE_EDGE (256)
+        } else {
+            edgeOffset = static_cast<float>(node->treevGeom.platform.depth * 0.5);
+        }
+        glm::vec3 edgePos(worldX + edgeOffset, worldY, worldZ);
+        float ex, ey;
+        if (!projectToScreen(viewProj, edgePos, imgPos, imgSize, ex, ey))
+            continue;
+
+        float screenSize = std::abs(ex - cx) * 2.0f;
+        if (screenSize < 20.0f) continue;
+
+        const char* name = node->name.c_str();
+        ImVec2 textSize = ImGui::CalcTextSize(name);
+
+        float maxTextWidth = screenSize * 0.9f;
+        if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
+            float textX = cx - maxTextWidth * 0.5f;
+            float textY = cy - textSize.y * 0.5f;
+            drawList->PushClipRect(
+                ImVec2(textX, textY),
+                ImVec2(textX + maxTextWidth, textY + textSize.y),
+                true
+            );
+            drawList->AddText(ImVec2(textX, textY), IM_COL32(255, 255, 255, 220), name);
+            drawList->PopClipRect();
+        } else if (textSize.x <= maxTextWidth || screenSize > 40.0f) {
+            float textX = cx - textSize.x * 0.5f;
+            float textY = cy - textSize.y * 0.5f;
+
+            // Shadow for readability
+            drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), IM_COL32(0, 0, 0, 180), name);
+            drawList->AddText(ImVec2(textX, textY), IM_COL32(255, 255, 255, 220), name);
+        }
+
+        // Recurse into expanded directories
+        if (node->isDir() && !node->isCollapsed()) {
+            drawTreeVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList, depth + 1);
+        }
+    }
+}
+
+// ============================================================================
 // Main draw
 // ============================================================================
 
@@ -519,6 +625,8 @@ void ViewportPanel::draw() {
                 drawMapVLabels(viewProj, imgPos_, imgSize_);
             } else if (mode == FSV_DISCV) {
                 drawDiscVLabels(viewProj, imgPos_, imgSize_);
+            } else if (mode == FSV_TREEV) {
+                drawTreeVLabels(viewProj, imgPos_, imgSize_);
             }
         }
     }

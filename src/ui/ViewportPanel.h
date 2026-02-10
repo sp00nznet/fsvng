@@ -37,6 +37,12 @@ private:
                                    ImVec2 imgPos, ImVec2 imgSize,
                                    ImDrawList* drawList, int depth);
 
+    // TreeV text label overlay
+    void drawTreeVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize);
+    void drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
+                                   ImVec2 imgPos, ImVec2 imgSize,
+                                   ImDrawList* drawList, int depth);
+
     // Viewport hit testing
     FsNode* hitTestMapV(float screenX, float screenY);
     FsNode* hitTestMapVRecursive(FsNode* dnode, float screenX, float screenY,
