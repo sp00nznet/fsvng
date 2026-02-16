@@ -164,6 +164,7 @@ nlohmann::json Config::toJson() const {
     j["lastRootPath"] = lastRootPath;
     j["defaultPath"] = defaultPath;
     j["lastMode"] = static_cast<int>(lastMode);
+    j["themeName"] = themeName;
 
     // Window settings
     j["window"]["width"] = windowWidth;
@@ -225,6 +226,9 @@ void Config::fromJson(const nlohmann::json& j) {
         if (m >= FSV_DISCV && m <= FSV_NONE) {
             lastMode = static_cast<FsvMode>(m);
         }
+    }
+    if (j.contains("themeName") && j["themeName"].is_string()) {
+        themeName = j["themeName"].get<std::string>();
     }
 
     // Window settings

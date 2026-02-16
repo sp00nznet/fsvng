@@ -12,6 +12,7 @@ private:
     void drawFileMenu();
     void drawVisMenu();
     void drawColorsMenu();
+    void drawThemesMenu();
     void drawHelpMenu();
 };
 

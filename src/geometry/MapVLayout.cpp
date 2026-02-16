@@ -7,6 +7,7 @@
 #include "renderer/ShaderProgram.h"
 #include "animation/Morph.h"
 #include "animation/Animation.h"
+#include "ui/ThemeManager.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -468,54 +469,32 @@ void MapVLayout::drawRecursive(FsNode* dnode, const glm::mat4& view,
 
     if (geometry) {
         // Draw directory face or geometry of children
-        if (dnode->aDlistStale) {
-            // Rebuild mesh
-            std::vector<Vertex> vertices;
-            std::vector<uint32_t> indices;
+        float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity;
 
-            if (dirCollapsed) {
-                buildFolderMesh(dnode, vertices, indices);
-            } else {
-                buildDir(dnode, vertices, indices);
-            }
+        // Rebuild mesh each frame (to be optimized with mesh caching)
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
 
-            if (!vertices.empty()) {
-                ShaderProgram& shader = Renderer::instance().getNodeShader();
-                shader.use();
-                shader.setMat4("uModel", ms.top());
-                shader.setMat4("uView", view);
-                shader.setMat4("uProjection", proj);
-
-                MeshBuffer mesh;
-                mesh.upload(vertices, indices);
-                mesh.draw(GL_TRIANGLES);
-            }
-
-            dnode->aDlistStale = false;
+        if (dirCollapsed) {
+            buildFolderMesh(dnode, vertices, indices);
         } else {
-            // In production, we would re-draw cached mesh here.
-            // For now, rebuild each frame (to be optimized with mesh caching).
-            std::vector<Vertex> vertices;
-            std::vector<uint32_t> indices;
-
-            if (dirCollapsed) {
-                buildFolderMesh(dnode, vertices, indices);
-            } else {
-                buildDir(dnode, vertices, indices);
-            }
-
-            if (!vertices.empty()) {
-                ShaderProgram& shader = Renderer::instance().getNodeShader();
-                shader.use();
-                shader.setMat4("uModel", ms.top());
-                shader.setMat4("uView", view);
-                shader.setMat4("uProjection", proj);
-
-                MeshBuffer mesh;
-                mesh.upload(vertices, indices);
-                mesh.draw(GL_TRIANGLES);
-            }
+            buildDir(dnode, vertices, indices);
         }
+
+        if (!vertices.empty()) {
+            ShaderProgram& shader = Renderer::instance().getNodeShader();
+            shader.use();
+            shader.setMat4("uModel", ms.top());
+            shader.setMat4("uView", view);
+            shader.setMat4("uProjection", proj);
+            shader.setFloat("uGlowIntensity", nodeGlow);
+
+            MeshBuffer mesh;
+            mesh.upload(vertices, indices);
+            mesh.draw(GL_TRIANGLES);
+        }
+
+        dnode->aDlistStale = false;
     }
 
     // Update geometry status

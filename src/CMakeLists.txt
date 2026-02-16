@@ -45,6 +45,8 @@ set(FSVNG_SOURCES
     ui/Toolbar.cpp
     ui/StatusBar.cpp
     ui/Dialogs.cpp
+    ui/ThemeManager.cpp
+    ui/PulseEffect.cpp
 )
 
 add_executable(fsvng ${FSVNG_SOURCES})

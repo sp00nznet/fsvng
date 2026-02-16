@@ -23,14 +23,17 @@ private:
     void drawColorConfig();
     void drawAbout();
     void drawContextMenu();
+    void drawProperties();
 
     bool showChangeRoot_ = false;
     bool showSetDefaultPath_ = false;
     bool showColorConfig_ = false;
     bool showAbout_ = false;
     bool showContextMenu_ = false;
+    bool showProperties_ = false;
 
     FsNode* contextMenuNode_ = nullptr;
+    FsNode* propertiesNode_ = nullptr;
     char rootPathBuf_[512] = {};
     char defaultPathBuf_[512] = {};
 };

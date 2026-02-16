@@ -319,6 +319,14 @@ double Camera::mapvLookAt(FsNode* node, MorphType mtype, double panTimeOverride)
     }
     double newDistance = dirMultiplier * fieldDistance(cam.fov, diameter);
 
+    // Enforce a minimum distance so deeply nested small nodes don't zoom in
+    // too far. Use the total height stack (z position) as a reference - the
+    // camera must be far enough to see the node in context of its ancestors.
+    double minDistance = 1.5 * newTarget.z;
+    if (newDistance < minDistance) {
+        newDistance = minDistance;
+    }
+
     // Clipping plane distances
     double newNearClip = NEAR_TO_DISTANCE_RATIO * newDistance;
     double newFarClip = FAR_TO_NEAR_RATIO * newNearClip;

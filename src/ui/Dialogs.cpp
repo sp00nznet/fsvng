@@ -3,9 +3,17 @@
 #include <imgui.h>
 #include <cstring>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 #include "core/FsNode.h"
 #include "core/Types.h"
 #include "ui/MainWindow.h"
+#include "ui/DirTreePanel.h"
+#include "geometry/CollapseExpand.h"
+#include "camera/Camera.h"
 #include "app/Config.h"
 
 namespace fsvng {
@@ -52,6 +60,7 @@ void Dialogs::draw() {
     drawColorConfig();
     drawAbout();
     drawContextMenu();
+    drawProperties();
 }
 
 void Dialogs::drawChangeRoot() {
@@ -216,29 +225,93 @@ void Dialogs::drawContextMenu() {
             ImGui::Separator();
 
             if (contextMenuNode_->isDir()) {
-                if (ImGui::MenuItem("Expand")) {
-                    // TODO: Expand directory in visualization
+                bool isExpanded = DirTreePanel::instance().isEntryExpanded(contextMenuNode_);
+                if (!isExpanded && ImGui::MenuItem("Expand")) {
+                    CollapseExpand::instance().execute(contextMenuNode_, ColExpAction::Expand);
                 }
-                if (ImGui::MenuItem("Collapse")) {
-                    // TODO: Collapse directory in visualization
+                if (isExpanded && ImGui::MenuItem("Collapse")) {
+                    CollapseExpand::instance().execute(contextMenuNode_, ColExpAction::CollapseRecursive);
                 }
-                if (ImGui::MenuItem("Set as Root")) {
-                    // TODO: Re-root visualization at this directory
+                if (ImGui::MenuItem("Scan as Root")) {
+                    MainWindow::instance().requestScan(contextMenuNode_->absName());
                 }
                 ImGui::Separator();
             }
 
-            if (ImGui::MenuItem("Properties")) {
-                // TODO: Show properties dialog for this node
+            if (ImGui::MenuItem("Look At")) {
+                MainWindow::instance().navigateTo(contextMenuNode_);
             }
 
-            if (ImGui::MenuItem("Look At")) {
-                // TODO: Navigate camera to this node
+#ifdef _WIN32
+            if (ImGui::MenuItem("Open in Explorer")) {
+                std::string path = contextMenuNode_->absName();
+                if (contextMenuNode_->isDir()) {
+                    ShellExecuteA(nullptr, "explore", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                } else {
+                    ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                }
+            }
+#endif
+
+            if (ImGui::MenuItem("Copy Path")) {
+                std::string path = contextMenuNode_->absName();
+                ImGui::SetClipboardText(path.c_str());
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Properties")) {
+                showProperties_ = true;
+                propertiesNode_ = contextMenuNode_;
             }
         }
 
         ImGui::EndPopup();
     }
+}
+
+void Dialogs::drawProperties() {
+    if (!showProperties_ || !propertiesNode_) return;
+
+    ImGui::SetNextWindowSize(ImVec2(350.0f, 0.0f), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin("Properties", &showProperties_)) {
+        ImGui::Text("Name: %s", propertiesNode_->name.c_str());
+        ImGui::Text("Path: %s", propertiesNode_->absName().c_str());
+        ImGui::Separator();
+
+        if (propertiesNode_->isDir()) {
+            ImGui::Text("Type: Directory");
+            ImGui::Text("Files: %d", propertiesNode_->subtree.counts[NODE_REGFILE]);
+            ImGui::Text("Subdirectories: %d", propertiesNode_->subtree.counts[NODE_DIRECTORY]);
+
+            // Show total subtree size
+            int64_t totalSize = propertiesNode_->subtree.size;
+            if (totalSize >= 1073741824LL) {
+                ImGui::Text("Total Size: %.2f GB", totalSize / 1073741824.0);
+            } else if (totalSize >= 1048576LL) {
+                ImGui::Text("Total Size: %.2f MB", totalSize / 1048576.0);
+            } else if (totalSize >= 1024LL) {
+                ImGui::Text("Total Size: %.2f KB", totalSize / 1024.0);
+            } else {
+                ImGui::Text("Total Size: %lld bytes", (long long)totalSize);
+            }
+        } else {
+            ImGui::Text("Type: %s", nodeTypeNames[propertiesNode_->type]);
+
+            int64_t sz = propertiesNode_->size;
+            if (sz >= 1073741824LL) {
+                ImGui::Text("Size: %.2f GB", sz / 1073741824.0);
+            } else if (sz >= 1048576LL) {
+                ImGui::Text("Size: %.2f MB", sz / 1048576.0);
+            } else if (sz >= 1024LL) {
+                ImGui::Text("Size: %.2f KB", sz / 1024.0);
+            } else {
+                ImGui::Text("Size: %lld bytes", (long long)sz);
+            }
+        }
+    }
+    ImGui::End();
 }
 
 } // namespace fsvng

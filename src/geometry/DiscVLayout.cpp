@@ -7,6 +7,7 @@
 #include "renderer/ShaderProgram.h"
 #include "animation/Morph.h"
 #include "animation/Animation.h"
+#include "ui/ThemeManager.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -330,11 +331,13 @@ void DiscVLayout::drawRecursive(FsNode* dnode, const glm::mat4& view,
             }
 
             if (!verts.empty()) {
+                float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity;
                 ShaderProgram& shader = Renderer::instance().getNodeShader();
                 shader.use();
                 shader.setMat4("uModel", ms.top());
                 shader.setMat4("uView", view);
                 shader.setMat4("uProjection", proj);
+                shader.setFloat("uGlowIntensity", nodeGlow);
 
                 MeshBuffer mesh;
                 mesh.upload(verts, inds);

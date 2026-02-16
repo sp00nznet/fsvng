@@ -6,6 +6,7 @@
 #include "core/Types.h"
 #include "ui/Dialogs.h"
 #include "ui/MainWindow.h"
+#include "ui/ThemeManager.h"
 #include "app/Config.h"
 
 namespace fsvng {
@@ -20,6 +21,7 @@ void MenuBar::draw() {
         drawFileMenu();
         drawVisMenu();
         drawColorsMenu();
+        drawThemesMenu();
         drawHelpMenu();
         ImGui::EndMainMenuBar();
     }
@@ -83,6 +85,20 @@ void MenuBar::drawColorsMenu() {
         ImGui::Separator();
         if (ImGui::MenuItem("Configure Colors...")) {
             Dialogs::instance().showColorConfig();
+        }
+        ImGui::EndMenu();
+    }
+}
+
+void MenuBar::drawThemesMenu() {
+    if (ImGui::BeginMenu("Themes")) {
+        ThemeManager& tm = ThemeManager::instance();
+        int current = tm.currentIndex();
+        const auto& themes = tm.themes();
+        for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
+            if (ImGui::RadioButton(themes[i].displayName.c_str(), current == i)) {
+                tm.setThemeByIndex(i);
+            }
         }
         ImGui::EndMenu();
     }

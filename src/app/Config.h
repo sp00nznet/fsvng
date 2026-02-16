@@ -27,6 +27,9 @@ public:
     ColorConfig colorConfig;
     ColorMode colorMode = COLOR_BY_NODETYPE;
 
+    // Theme
+    std::string themeName = "classic";
+
     // Get config file path
     static std::string getConfigPath();
 

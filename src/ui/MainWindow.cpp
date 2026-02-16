@@ -23,6 +23,7 @@
 #include "geometry/GeometryManager.h"
 #include "geometry/CollapseExpand.h"
 #include "camera/Camera.h"
+#include "ui/PulseEffect.h"
 
 namespace fsvng {
 
@@ -255,6 +256,7 @@ void MainWindow::finishScan() {
     }
 
     // Clear UI state before replacing tree
+    PulseEffect::instance().reset();
     DirTreePanel::instance().selectNode(nullptr);
     DirTreePanel::instance().clearExpanded();
     FileListPanel::instance().showDirectory(nullptr);

@@ -14,6 +14,7 @@
 #include "renderer/Renderer.h"
 #include "color/ColorSystem.h"
 #include "app/Config.h"
+#include "ui/ThemeManager.h"
 
 namespace fsvng {
 
@@ -93,6 +94,10 @@ bool App::init(int argc, char* argv[]) {
     // Initialize color system
     ColorSystem::instance().init();
 
+    // Initialize theme system
+    ThemeManager::instance().init();
+    ThemeManager::instance().setThemeById(Config::instance().themeName);
+
     // Initialize animation system
     Animation::instance().init();
 
@@ -127,6 +132,7 @@ void App::run() {
 }
 
 void App::shutdown() {
+    Config::instance().themeName = ThemeManager::instance().currentTheme().id;
     Config::instance().save();
     Renderer::instance().shutdown();
     ImGuiBackend::shutdown();

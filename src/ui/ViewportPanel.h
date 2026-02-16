@@ -56,6 +56,11 @@ private:
 
     bool dragging_ = false;
 
+    // Right-click context menu state
+    bool rightMouseDown_ = false;
+    ImVec2 rightClickPos_{0, 0};
+    float rightClickDragDist_ = 0.0f;
+
     // Cached rendering state for hit testing
     glm::mat4 cachedViewProj_{1.0f};
     ImVec2 imgPos_{0, 0};

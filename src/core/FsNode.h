@@ -66,6 +66,9 @@ public:
     MapVGeomParams mapvGeom{};
     TreeVGeomParams treevGeom{};
 
+    // Transient glow intensity (set by PulseEffect each frame, not persisted)
+    float glowIntensity = 0.0f;
+
     // Directory-specific fields (from DirNodeDesc)
     double deployment = 0.0;  // 0 = collapsed, 1 = expanded
 
