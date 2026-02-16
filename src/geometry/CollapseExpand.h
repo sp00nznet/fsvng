@@ -21,7 +21,6 @@ public:
     void execute(FsNode* dnode, ColExpAction action);
 
     // Duration of a single collapse/expansion (in seconds)
-    static constexpr double DISCV_TIME = 1.5;
     static constexpr double MAPV_TIME = 0.375;
     static constexpr double TREEV_TIME = 0.5;
 

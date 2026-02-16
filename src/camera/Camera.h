@@ -23,10 +23,6 @@ struct CameraState {
     bool manualControl = false;
 };
 
-struct DiscVCameraState : CameraState {
-    XYvec target{};
-};
-
 struct MapVCameraState : CameraState {
     XYZvec target{};
 };
@@ -74,11 +70,9 @@ public:
     CameraState& state() { return *reinterpret_cast<CameraState*>(&currentCamera_); }
     const CameraState& state() const { return *reinterpret_cast<const CameraState*>(&currentCamera_); }
 
-    DiscVCameraState& discvState() { return currentCamera_.discv; }
     MapVCameraState& mapvState() { return currentCamera_.mapv; }
     TreeVCameraState& treevState() { return currentCamera_.treev; }
 
-    const DiscVCameraState& discvState() const { return currentCamera_.discv; }
     const MapVCameraState& mapvState() const { return currentCamera_.mapv; }
     const TreeVCameraState& treevState() const { return currentCamera_.treev; }
 
@@ -94,7 +88,6 @@ private:
     double fieldDiameter(double fov, double distance) const;
     double fieldDistance(double fov, double diameter) const;
 
-    double discvLookAt(FsNode* node, MorphType mtype, double panTimeOverride);
     double mapvLookAt(FsNode* node, MorphType mtype, double panTimeOverride);
     double treevLookAt(FsNode* node, MorphType mtype, double panTimeOverride);
 
@@ -103,7 +96,6 @@ private:
 
     // Camera state union
     union AnyCameraState {
-        DiscVCameraState discv;
         MapVCameraState mapv;
         TreeVCameraState treev;
         AnyCameraState() : mapv{} {}
@@ -121,8 +113,6 @@ private:
     FsNode* currentNode_ = nullptr;
 
     // Pan timing constants
-    static constexpr double DISCV_MIN_PAN_TIME = 0.5;
-    static constexpr double DISCV_MAX_PAN_TIME = 3.0;
     static constexpr double MAPV_MIN_PAN_TIME = 0.5;
     static constexpr double MAPV_MAX_PAN_TIME = 4.0;
     static constexpr double TREEV_MIN_PAN_TIME = 1.0;

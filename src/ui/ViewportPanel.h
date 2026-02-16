@@ -31,12 +31,6 @@ private:
                                   ImVec2 imgPos, ImVec2 imgSize,
                                   ImDrawList* drawList, double zBase, int depth);
 
-    // DiscV text label overlay
-    void drawDiscVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize);
-    void drawDiscVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
-                                   ImVec2 imgPos, ImVec2 imgSize,
-                                   ImDrawList* drawList, int depth);
-
     // TreeV text label overlay
     void drawTreeVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize);
     void drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
@@ -60,6 +54,8 @@ private:
     bool rightMouseDown_ = false;
     ImVec2 rightClickPos_{0, 0};
     float rightClickDragDist_ = 0.0f;
+    bool openContextMenu_ = false;
+    FsNode* contextMenuNode_ = nullptr;
 
     // Cached rendering state for hit testing
     glm::mat4 cachedViewProj_{1.0f};

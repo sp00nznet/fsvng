@@ -223,7 +223,7 @@ void Config::fromJson(const nlohmann::json& j) {
     }
     if (j.contains("lastMode") && j["lastMode"].is_number_integer()) {
         int m = j["lastMode"].get<int>();
-        if (m >= FSV_DISCV && m <= FSV_NONE) {
+        if (m >= FSV_MAPV && m <= FSV_NONE) {
             lastMode = static_cast<FsvMode>(m);
         }
     }

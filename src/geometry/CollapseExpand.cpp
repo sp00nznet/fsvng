@@ -130,9 +130,6 @@ void CollapseExpand::execute(FsNode* dnode, ColExpAction action) {
 
         // Collapse/expand time for current visualization mode
         switch (gm.currentMode()) {
-            case FSV_DISCV:
-                colexpTime = DISCV_TIME;
-                break;
             case FSV_MAPV:
                 colexpTime = MAPV_TIME;
                 break;

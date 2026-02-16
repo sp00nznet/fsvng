@@ -200,7 +200,9 @@ void TreeVLayout::initRecursive(FsNode* dnode) {
 
     dnode->flags = 0;
 
-    // Assign heights to leaf nodes
+    // Assign heights to leaf nodes using log scale to handle extreme size ranges
+    // (0-byte files next to multi-GB files). Log scale gives a reasonable visual
+    // ratio: log2(64)=6 vs log2(10GB)=33, instead of sqrt which gives 8 vs 103K.
     for (auto& childPtr : dnode->children) {
         FsNode* node = childPtr.get();
         int64_t size = std::max(int64_t(64), node->size);
@@ -209,7 +211,8 @@ void TreeVLayout::initRecursive(FsNode* dnode) {
             node->treevGeom.platform.height = PLATFORM_HEIGHT;
             initRecursive(node);
         }
-        node->treevGeom.leaf.height = std::sqrt(static_cast<double>(size)) * LEAF_HEIGHT_MULTIPLIER;
+        double logHeight = std::log2(static_cast<double>(size));
+        node->treevGeom.leaf.height = logHeight * LEAF_HEIGHT_MULTIPLIER * 16.0;
     }
 }
 

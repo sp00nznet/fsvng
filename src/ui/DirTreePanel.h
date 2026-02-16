@@ -29,6 +29,8 @@ private:
     void drawNode(FsNode* node);
 
     FsNode* selectedNode_ = nullptr;
+    FsNode* contextMenuNode_ = nullptr;
+    FsNode* contextMenuNode_pending_ = nullptr;
     std::set<FsNode*> expandedNodes_;
 };
 

@@ -64,10 +64,6 @@ void Toolbar::draw() {
         if (ImGui::RadioButton("Tree", currentMode == FSV_TREEV)) {
             mw.setMode(FSV_TREEV);
         }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Disc", currentMode == FSV_DISCV)) {
-            mw.setMode(FSV_DISCV);
-        }
     }
     ImGui::End();
 }

@@ -49,17 +49,11 @@ void Dialogs::showAbout() {
     showAbout_ = true;
 }
 
-void Dialogs::showContextMenu(FsNode* node) {
-    contextMenuNode_ = node;
-    showContextMenu_ = true;
-}
-
 void Dialogs::draw() {
     drawChangeRoot();
     drawSetDefaultPath();
     drawColorConfig();
     drawAbout();
-    drawContextMenu();
     drawProperties();
 }
 
@@ -198,7 +192,7 @@ void Dialogs::drawAbout() {
         ImGui::Spacing();
         ImGui::Text("A modern C++17 reimplementation of fsv.");
         ImGui::Text("Visualize your filesystem in 3D with");
-        ImGui::Text("MapV, TreeV, and DiscV modes.");
+        ImGui::Text("MapV and TreeV modes.");
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Text("Based on fsv by Daniel Richard G.");
@@ -213,39 +207,34 @@ void Dialogs::drawAbout() {
     }
 }
 
-void Dialogs::drawContextMenu() {
-    if (!showContextMenu_) return;
-
-    ImGui::OpenPopup("##NodeContextMenu");
-    showContextMenu_ = false;  // Only open once; popup stays open on its own
-
-    if (ImGui::BeginPopup("##NodeContextMenu")) {
-        if (contextMenuNode_) {
-            ImGui::TextDisabled("%s", contextMenuNode_->name.c_str());
+void Dialogs::drawContextMenuPopup(const char* popupId, FsNode* node) {
+    if (ImGui::BeginPopup(popupId)) {
+        if (node) {
+            ImGui::TextDisabled("%s", node->name.c_str());
             ImGui::Separator();
 
-            if (contextMenuNode_->isDir()) {
-                bool isExpanded = DirTreePanel::instance().isEntryExpanded(contextMenuNode_);
+            if (node->isDir()) {
+                bool isExpanded = DirTreePanel::instance().isEntryExpanded(node);
                 if (!isExpanded && ImGui::MenuItem("Expand")) {
-                    CollapseExpand::instance().execute(contextMenuNode_, ColExpAction::Expand);
+                    CollapseExpand::instance().execute(node, ColExpAction::Expand);
                 }
                 if (isExpanded && ImGui::MenuItem("Collapse")) {
-                    CollapseExpand::instance().execute(contextMenuNode_, ColExpAction::CollapseRecursive);
+                    CollapseExpand::instance().execute(node, ColExpAction::CollapseRecursive);
                 }
                 if (ImGui::MenuItem("Scan as Root")) {
-                    MainWindow::instance().requestScan(contextMenuNode_->absName());
+                    MainWindow::instance().requestScan(node->absName());
                 }
                 ImGui::Separator();
             }
 
             if (ImGui::MenuItem("Look At")) {
-                MainWindow::instance().navigateTo(contextMenuNode_);
+                MainWindow::instance().navigateTo(node);
             }
 
 #ifdef _WIN32
-            if (ImGui::MenuItem("Open in Explorer")) {
-                std::string path = contextMenuNode_->absName();
-                if (contextMenuNode_->isDir()) {
+            if (ImGui::MenuItem("Open")) {
+                std::string path = node->absName();
+                if (node->isDir()) {
                     ShellExecuteA(nullptr, "explore", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
                 } else {
                     ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
@@ -254,7 +243,7 @@ void Dialogs::drawContextMenu() {
 #endif
 
             if (ImGui::MenuItem("Copy Path")) {
-                std::string path = contextMenuNode_->absName();
+                std::string path = node->absName();
                 ImGui::SetClipboardText(path.c_str());
             }
 
@@ -262,7 +251,7 @@ void Dialogs::drawContextMenu() {
 
             if (ImGui::MenuItem("Properties")) {
                 showProperties_ = true;
-                propertiesNode_ = contextMenuNode_;
+                propertiesNode_ = node;
             }
         }
 

@@ -66,25 +66,6 @@ void Camera::init(FsvMode mode, bool initialView) {
     FsNode* rootDir = FsTree::instance().rootDir();
 
     switch (mode) {
-        case FSV_DISCV: {
-            double rootRadius = 1000.0;  // Default; real value comes from geometry
-            if (rootDir) {
-                rootRadius = rootDir->discvGeom.radius;
-                if (rootRadius < EPSILON) rootRadius = 1000.0;
-            }
-            double d = fieldDistance(cam.fov, 2.0 * rootRadius);
-            if (initialView) {
-                cam.distance = 2.0 * d;
-            } else {
-                cam.distance = 3.0 * d;
-            }
-            discvState().target.x = 0.0;
-            discvState().target.y = 0.0;
-            cam.nearClip = NEAR_TO_DISTANCE_RATIO * cam.distance;
-            cam.farClip = FAR_TO_NEAR_RATIO * cam.nearClip;
-            break;
-        }
-
         case FSV_MAPV: {
             double rootWidth = 1000.0;
             double rootHeight = 100.0;
@@ -157,10 +138,6 @@ void Camera::panFinish() {
     me.morphFinish(&cam.panPart);
 
     switch (currentMode_) {
-        case FSV_DISCV:
-            me.morphFinish(&discvState().target.x);
-            me.morphFinish(&discvState().target.y);
-            break;
         case FSV_MAPV:
             me.morphFinish(&mapvState().target.x);
             me.morphFinish(&mapvState().target.y);
@@ -189,10 +166,6 @@ void Camera::panBreak() {
     me.morphBreak(&cam.panPart);
 
     switch (currentMode_) {
-        case FSV_DISCV:
-            me.morphBreak(&discvState().target.x);
-            me.morphBreak(&discvState().target.y);
-            break;
         case FSV_MAPV:
             me.morphBreak(&mapvState().target.x);
             me.morphBreak(&mapvState().target.y);
@@ -211,46 +184,6 @@ void Camera::panBreak() {
 // ============================================================================
 // Mode-specific lookAt helpers
 // ============================================================================
-
-double Camera::discvLookAt(FsNode* node, MorphType mtype, double panTimeOverride) {
-    auto& me = MorphEngine::instance();
-    CameraState& cam = state();
-
-    // Construct desired camera state
-    double nodeRadius = node->discvGeom.radius;
-    if (nodeRadius < EPSILON) nodeRadius = 100.0;
-
-    double newDistance = 2.0 * fieldDistance(cam.fov, 2.0 * nodeRadius);
-    double newNearClip = NEAR_TO_DISTANCE_RATIO * newDistance;
-    double newFarClip = FAR_TO_NEAR_RATIO * newNearClip;
-
-    // Compute absolute disc position (sum of all ancestor positions)
-    double targetX = 0.0, targetY = 0.0;
-    FsNode* upNode = node;
-    while (upNode) {
-        targetX += upNode->discvGeom.pos.x;
-        targetY += upNode->discvGeom.pos.y;
-        upNode = upNode->parent;
-    }
-
-    // Duration of pan
-    double panTime;
-    if (panTimeOverride > 0.0) {
-        panTime = panTimeOverride;
-    } else {
-        // TODO: write a proper pan_time function
-        panTime = 2.0;
-    }
-
-    // Get the camera moving
-    me.morph(&cam.distance, mtype, newDistance, panTime);
-    me.morph(&cam.nearClip, mtype, newNearClip, panTime);
-    me.morph(&cam.farClip, mtype, newFarClip, panTime);
-    me.morph(&discvState().target.x, mtype, targetX, panTime);
-    me.morph(&discvState().target.y, mtype, targetY, panTime);
-
-    return panTime;
-}
 
 void Camera::mapvGetCameraPosition(const CameraState* cam, const XYZvec* target, XYZvec* pos) const {
     double sinTheta = std::sin(rad(cam->theta));
@@ -554,9 +487,6 @@ void Camera::lookAtFull(FsNode* node, MorphType mtype, double panTimeOverride) {
     double panTime = 0.0;
 
     switch (currentMode_) {
-        case FSV_DISCV:
-            panTime = discvLookAt(node, mtype, panTimeOverride);
-            break;
         case FSV_MAPV:
             panTime = mapvLookAt(node, mtype, panTimeOverride);
             break;
@@ -765,11 +695,6 @@ void Camera::pan(double dx, double dy) {
             mapvState().target.y += (-dx * cosTheta + dy * sinTheta) * scale;
             break;
         }
-        case FSV_DISCV: {
-            discvState().target.x += dx * scale;
-            discvState().target.y -= dy * scale;
-            break;
-        }
         case FSV_TREEV: {
             treevState().target.theta -= dx * 0.15;
             treevState().target.z += dy * scale;
@@ -793,7 +718,6 @@ void Camera::birdseyeView(bool goingUp) {
     // Determine length of pan
     double panTime = 0.0;
     switch (currentMode_) {
-        case FSV_DISCV: panTime = DISCV_MAX_PAN_TIME; break;
         case FSV_MAPV:  panTime = MAPV_MAX_PAN_TIME;  break;
         case FSV_TREEV: panTime = TREEV_MAX_PAN_TIME;  break;
         default: return;
@@ -811,15 +735,6 @@ void Camera::birdseyeView(bool goingUp) {
         FsNode* rootDir = FsTree::instance().rootDir();
 
         switch (currentMode_) {
-            case FSV_DISCV: {
-                double rootRadius = 1000.0;
-                if (rootDir) {
-                    rootRadius = rootDir->discvGeom.radius;
-                    if (rootRadius < EPSILON) rootRadius = 1000.0;
-                }
-                newDistance = 2.0 * fieldDistance(cam.fov, 2.0 * rootRadius);
-                break;
-            }
             case FSV_MAPV: {
                 double rootWidth = 1000.0;
                 if (rootDir) {
@@ -860,12 +775,6 @@ void Camera::birdseyeView(bool goingUp) {
         me.morph(&cam.farClip, MorphType::Sigmoid, preCam->farClip, panTime);
 
         switch (currentMode_) {
-            case FSV_DISCV: {
-                DiscVCameraState* pre = &preBirdseyeCamera_.discv;
-                me.morph(&discvState().target.x, MorphType::Sigmoid, pre->target.x, panTime);
-                me.morph(&discvState().target.y, MorphType::Sigmoid, pre->target.y, panTime);
-                break;
-            }
             case FSV_MAPV: {
                 MapVCameraState* pre = &preBirdseyeCamera_.mapv;
                 me.morph(&mapvState().target.x, MorphType::Sigmoid, pre->target.x, panTime);
@@ -912,16 +821,6 @@ glm::mat4 Camera::getViewMatrix() const {
     glm::dvec3 eye, target, up;
 
     switch (currentMode_) {
-        case FSV_DISCV: {
-            // DiscV: top-down view looking along -Z, so up must be (0,1,0) not (0,0,1)
-            // Using (0,0,1) as up when eye-target is along Z axis is degenerate (anti-parallel)
-            const DiscVCameraState& dcam = discvState();
-            target = glm::dvec3(dcam.target.x, dcam.target.y, 0.0);
-            eye = glm::dvec3(dcam.target.x, dcam.target.y, cam.distance);
-            up = glm::dvec3(0.0, 1.0, 0.0);
-            break;
-        }
-
         case FSV_MAPV: {
             // MapV: target is XYZ, camera orbits using theta/phi/distance spherical coords
             const MapVCameraState& mcam = mapvState();

@@ -34,7 +34,6 @@ set(FSVNG_SOURCES
     geometry/GeometryManager.cpp
     geometry/MapVLayout.cpp
     geometry/TreeVLayout.cpp
-    geometry/DiscVLayout.cpp
     geometry/CollapseExpand.cpp
     ui/ImGuiBackend.cpp
     ui/MainWindow.cpp

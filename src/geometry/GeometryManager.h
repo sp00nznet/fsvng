@@ -62,9 +62,6 @@ public:
     double treevMaxLeafHeight(FsNode* dnode) const;
     void treevGetExtents(FsNode* dnode, RTvec* extC0, RTvec* extC1) const;
 
-    // DiscV helpers
-    XYvec discvNodePos(FsNode* node) const;
-
     FsvMode currentMode() const { return mode_; }
     MatrixStack& modelStack() { return modelStack_; }
 

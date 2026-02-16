@@ -61,9 +61,6 @@ void MenuBar::drawVisMenu() {
         if (ImGui::RadioButton("TreeV", currentMode == FSV_TREEV)) {
             mw.setMode(FSV_TREEV);
         }
-        if (ImGui::RadioButton("DiscV", currentMode == FSV_DISCV)) {
-            mw.setMode(FSV_DISCV);
-        }
         ImGui::EndMenu();
     }
 }

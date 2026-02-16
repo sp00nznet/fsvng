@@ -1,7 +1,6 @@
 #include "geometry/GeometryManager.h"
 #include "geometry/MapVLayout.h"
 #include "geometry/TreeVLayout.h"
-#include "geometry/DiscVLayout.h"
 #include "core/FsNode.h"
 #include "core/FsTree.h"
 #include "ui/DirTreePanel.h"
@@ -59,9 +58,6 @@ void GeometryManager::init(FsvMode mode) {
     queueRebuild(root);
 
     switch (mode) {
-        case FSV_DISCV:
-            DiscVLayout::instance().init();
-            break;
         case FSV_MAPV:
             MapVLayout::instance().init();
             break;
@@ -75,9 +71,6 @@ void GeometryManager::init(FsvMode mode) {
 
 void GeometryManager::draw(const glm::mat4& view, const glm::mat4& projection, bool highDetail) {
     switch (mode_) {
-        case FSV_DISCV:
-            DiscVLayout::instance().draw(view, projection, highDetail);
-            break;
         case FSV_MAPV:
             MapVLayout::instance().draw(view, projection, highDetail);
             break;
@@ -91,9 +84,6 @@ void GeometryManager::draw(const glm::mat4& view, const glm::mat4& projection, b
 
 void GeometryManager::drawForPicking(const glm::mat4& view, const glm::mat4& projection) {
     switch (mode_) {
-        case FSV_DISCV:
-            DiscVLayout::instance().drawForPicking(view, projection);
-            break;
         case FSV_MAPV:
             MapVLayout::instance().drawForPicking(view, projection);
             break;
@@ -120,9 +110,6 @@ void GeometryManager::queueUncachedDraw() {
 
 void GeometryManager::cameraPanFinished() {
     switch (mode_) {
-        case FSV_DISCV:
-            // Not yet implemented in original
-            break;
         case FSV_MAPV:
             MapVLayout::instance().cameraPanFinished();
             break;
@@ -176,8 +163,6 @@ bool GeometryManager::shouldHighlight(FsNode* node) const {
         return true;
 
     switch (mode_) {
-        case FSV_DISCV:
-            return true;
         case FSV_MAPV:
             return node->isCollapsed();
         case FSV_TREEV:
@@ -312,25 +297,6 @@ void GeometryManager::treevGetExtents(FsNode* dnode, RTvec* extC0, RTvec* extC1)
 
     if (extC0 != nullptr) *extC0 = c0;
     if (extC1 != nullptr) *extC1 = c1;
-}
-
-// ============================================================================
-// DiscV helpers
-// ============================================================================
-
-XYvec GeometryManager::discvNodePos(FsNode* node) const {
-    XYvec pos{};
-    pos.x = 0.0;
-    pos.y = 0.0;
-
-    FsNode* upNode = node;
-    while (upNode != nullptr) {
-        pos.x += upNode->discvGeom.pos.x;
-        pos.y += upNode->discvGeom.pos.y;
-        upNode = upNode->parent;
-    }
-
-    return pos;
 }
 
 } // namespace fsvng

@@ -6,6 +6,7 @@
 #include "core/FsTree.h"
 #include "ui/FileListPanel.h"
 #include "ui/MainWindow.h"
+#include "ui/Dialogs.h"
 
 namespace fsvng {
 
@@ -23,6 +24,14 @@ void DirTreePanel::draw() {
     } else {
         ImGui::TextDisabled("No filesystem loaded");
     }
+
+    // Context menu popup (within this window's scope)
+    if (contextMenuNode_) {
+        ImGui::OpenPopup("##DirTreeContextMenu");
+        contextMenuNode_pending_ = contextMenuNode_;
+        contextMenuNode_ = nullptr;
+    }
+    Dialogs::instance().drawContextMenuPopup("##DirTreeContextMenu", contextMenuNode_pending_);
 
     ImGui::End();
 }
@@ -64,6 +73,12 @@ void DirTreePanel::drawNode(FsNode* node) {
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
         selectedNode_ = node;
         MainWindow::instance().navigateTo(node);
+    }
+
+    // Right-click context menu
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        contextMenuNode_ = node;
+        selectedNode_ = node;
     }
 
     // Track expansion state

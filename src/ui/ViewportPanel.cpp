@@ -7,11 +7,6 @@
 #include <algorithm>
 #include <cmath>
 
-#ifdef _WIN32
-#include <windows.h>
-#include <shellapi.h>
-#endif
-
 #include "ui/MainWindow.h"
 #include "ui/Dialogs.h"
 #include "ui/ThemeManager.h"
@@ -80,7 +75,7 @@ void ViewportPanel::handleInput() {
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 mousePos = ImGui::GetMousePos();
 
-    // Double-click: navigate to node under cursor or launch file
+    // Double-click: navigate to node under cursor
     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hasScene_) {
         FsNode* hit = nullptr;
         FsvMode mode = MainWindow::instance().getMode();
@@ -88,16 +83,7 @@ void ViewportPanel::handleInput() {
             hit = hitTestMapV(mousePos.x, mousePos.y);
         }
         if (hit) {
-            if (hit->isDir()) {
-                MainWindow::instance().navigateTo(hit);
-            } else {
-                // Non-directory: navigate to it and launch with OS default handler
-                MainWindow::instance().navigateTo(hit);
-#ifdef _WIN32
-                std::string path = hit->absName();
-                ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-#endif
-            }
+            MainWindow::instance().navigateTo(hit);
             dragging_ = false;
             return;
         }
@@ -150,7 +136,8 @@ void ViewportPanel::handleInput() {
                 hit = MainWindow::instance().getCurrentNode();
             }
             if (hit) {
-                Dialogs::instance().showContextMenu(hit);
+                contextMenuNode_ = hit;
+                openContextMenu_ = true;
             }
         }
     }
@@ -385,93 +372,6 @@ void ViewportPanel::drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& view
 }
 
 // ============================================================================
-// DiscV text label overlay
-// ============================================================================
-
-void ViewportPanel::drawDiscVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize) {
-    FsNode* rootDir = FsTree::instance().rootDir();
-    if (!rootDir) return;
-
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-    // Draw label for the root disc itself
-    GeometryManager& gm = GeometryManager::instance();
-    XYvec rootPos = gm.discvNodePos(rootDir);
-    glm::vec3 rootWorld(static_cast<float>(rootPos.x),
-                        static_cast<float>(rootPos.y), 0.0f);
-    float rcx, rcy;
-    if (projectToScreen(viewProj, rootWorld, imgPos, imgSize, rcx, rcy)) {
-        const char* name = rootDir->name.c_str();
-        ImVec2 textSize = ImGui::CalcTextSize(name);
-        float textX = rcx - textSize.x * 0.5f;
-        float textY = rcy - textSize.y * 0.5f;
-        drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), ThemeManager::instance().currentTheme().labelShadow, name);
-        drawList->AddText(ImVec2(textX, textY), ThemeManager::instance().currentTheme().labelColor, name);
-    }
-
-    drawDiscVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0);
-}
-
-void ViewportPanel::drawDiscVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
-                                              ImVec2 imgPos, ImVec2 imgSize,
-                                              ImDrawList* drawList, int depth) {
-    if (depth > 20) return;
-
-    GeometryManager& gm = GeometryManager::instance();
-
-    for (auto& childPtr : dnode->children) {
-        FsNode* node = childPtr.get();
-        bool isExpandedDir = node->isDir() && !node->isCollapsed();
-
-        // Get absolute world position of this disc
-        XYvec absPos = gm.discvNodePos(node);
-        glm::vec3 worldPos(static_cast<float>(absPos.x),
-                           static_cast<float>(absPos.y), 0.0f);
-
-        // Project center to screen
-        float cx, cy;
-        bool centerVisible = projectToScreen(viewProj, worldPos, imgPos, imgSize, cx, cy);
-
-        if (centerVisible) {
-            float radius = static_cast<float>(node->discvGeom.radius);
-            glm::vec3 edgePos(static_cast<float>(absPos.x) + radius,
-                              static_cast<float>(absPos.y), 0.0f);
-            float ex, ey;
-            if (projectToScreen(viewProj, edgePos, imgPos, imgSize, ex, ey)) {
-                float screenRadius = std::abs(ex - cx);
-                if (screenRadius >= 15.0f) {
-                    const char* name = node->name.c_str();
-                    ImVec2 textSize = ImGui::CalcTextSize(name);
-
-                    float maxTextWidth = screenRadius * 1.6f;
-                    if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
-                        float textX = cx - maxTextWidth * 0.5f;
-                        float textY = cy - textSize.y * 0.5f;
-                        drawList->PushClipRect(
-                            ImVec2(textX, textY),
-                            ImVec2(textX + maxTextWidth, textY + textSize.y),
-                            true
-                        );
-                        drawList->AddText(ImVec2(textX, textY), ThemeManager::instance().currentTheme().labelColor, name);
-                        drawList->PopClipRect();
-                    } else if (textSize.x <= maxTextWidth || screenRadius > 30.0f) {
-                        float textX = cx - textSize.x * 0.5f;
-                        float textY = cy - textSize.y * 0.5f;
-                        drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), ThemeManager::instance().currentTheme().labelShadow, name);
-                        drawList->AddText(ImVec2(textX, textY), ThemeManager::instance().currentTheme().labelColor, name);
-                    }
-                }
-            }
-        }
-
-        // Always recurse into expanded directories regardless of projection
-        if (isExpandedDir) {
-            drawDiscVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList, depth + 1);
-        }
-    }
-}
-
-// ============================================================================
 // TreeV text label overlay
 // ============================================================================
 
@@ -484,12 +384,50 @@ void ViewportPanel::drawTreeVLabels(const glm::mat4& viewProj, ImVec2 imgPos, Im
     drawTreeVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0);
 }
 
+// Helper: draw a label at a given screen position if the node projects large enough
+static void drawTreeVLabel(ImDrawList* drawList, const glm::mat4& viewProj,
+                           ImVec2 imgPos, ImVec2 imgSize,
+                           const glm::vec3& worldPos, float edgeOffset,
+                           const char* name) {
+    float cx, cy;
+    if (!projectToScreen(viewProj, worldPos, imgPos, imgSize, cx, cy)) return;
+
+    glm::vec3 edgePos(worldPos.x + edgeOffset, worldPos.y, worldPos.z);
+    float ex, ey;
+    if (!projectToScreen(viewProj, edgePos, imgPos, imgSize, ex, ey)) return;
+
+    float screenSize = std::abs(ex - cx) * 2.0f;
+    if (screenSize < 20.0f) return;
+
+    ImVec2 textSize = ImGui::CalcTextSize(name);
+    const Theme& theme = ThemeManager::instance().currentTheme();
+
+    float maxTextWidth = screenSize * 0.9f;
+    if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
+        float textX = cx - maxTextWidth * 0.5f;
+        float textY = cy - textSize.y * 0.5f;
+        drawList->PushClipRect(
+            ImVec2(textX, textY),
+            ImVec2(textX + maxTextWidth, textY + textSize.y),
+            true
+        );
+        drawList->AddText(ImVec2(textX, textY), theme.labelColor, name);
+        drawList->PopClipRect();
+    } else if (textSize.x <= maxTextWidth || screenSize > 40.0f) {
+        float textX = cx - textSize.x * 0.5f;
+        float textY = cy - textSize.y * 0.5f;
+        drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), theme.labelShadow, name);
+        drawList->AddText(ImVec2(textX, textY), theme.labelColor, name);
+    }
+}
+
 void ViewportPanel::drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
                                               ImVec2 imgPos, ImVec2 imgSize,
                                               ImDrawList* drawList, int depth) {
     if (depth > 20) return;
 
     GeometryManager& gm = GeometryManager::instance();
+    constexpr double PI = 3.14159265358979323846;
 
     // Get absolute cylindrical coords for this directory's platform
     double platformR0 = gm.treevPlatformR0(dnode);
@@ -499,68 +437,39 @@ void ViewportPanel::drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& vie
         FsNode* node = childPtr.get();
         bool isExpandedDir = node->isDir() && !node->isCollapsed();
 
-        float worldX, worldY, worldZ;
+        const char* name = node->name.c_str();
 
         if (!node->isDir()) {
             double r = platformR0 + node->treevGeom.leaf.distance;
             double theta = platformTheta + node->treevGeom.leaf.theta;
-            double thetaRad = theta * 3.14159265358979323846 / 180.0;
-            worldX = static_cast<float>(r * std::cos(thetaRad));
-            worldY = static_cast<float>(r * std::sin(thetaRad));
-            // Position label at top of leaf geometry (parent platform height + leaf height)
+            double thetaRad = theta * PI / 180.0;
+            float worldX = static_cast<float>(r * std::cos(thetaRad));
+            float worldY = static_cast<float>(r * std::sin(thetaRad));
             double parentHeight = dnode->treevGeom.platform.height;
-            worldZ = static_cast<float>(parentHeight + node->treevGeom.leaf.height);
+            float topZ = static_cast<float>(parentHeight + node->treevGeom.leaf.height);
+            float baseZ = static_cast<float>(parentHeight);
+
+            // Label on TOP of leaf
+            drawTreeVLabel(drawList, viewProj, imgPos, imgSize,
+                           glm::vec3(worldX, worldY, topZ), 128.0f, name);
+
+            // Label on FRONT face (midpoint of front face height)
+            float frontZ = (baseZ + topZ) * 0.5f;
+            drawTreeVLabel(drawList, viewProj, imgPos, imgSize,
+                           glm::vec3(worldX, worldY, frontZ), 128.0f, name);
         } else {
             double childR0 = gm.treevPlatformR0(node);
             double childTheta = gm.treevPlatformTheta(node);
             double r = childR0 + 0.5 * node->treevGeom.platform.depth;
-            double thetaRad = childTheta * 3.14159265358979323846 / 180.0;
-            worldX = static_cast<float>(r * std::cos(thetaRad));
-            worldY = static_cast<float>(r * std::sin(thetaRad));
-            // Position label at top of platform
-            worldZ = static_cast<float>(node->treevGeom.platform.height);
-        }
+            double thetaRad = childTheta * PI / 180.0;
+            float worldX = static_cast<float>(r * std::cos(thetaRad));
+            float worldY = static_cast<float>(r * std::sin(thetaRad));
+            float topZ = static_cast<float>(node->treevGeom.platform.height);
+            float edgeOffset = static_cast<float>(node->treevGeom.platform.depth * 0.5);
 
-        glm::vec3 worldPos(worldX, worldY, worldZ);
-
-        // Project to screen
-        float cx, cy;
-        bool centerVisible = projectToScreen(viewProj, worldPos, imgPos, imgSize, cx, cy);
-
-        if (centerVisible) {
-            float edgeOffset;
-            if (!node->isDir()) {
-                edgeOffset = 128.0f;
-            } else {
-                edgeOffset = static_cast<float>(node->treevGeom.platform.depth * 0.5);
-            }
-            glm::vec3 edgePos(worldX + edgeOffset, worldY, worldZ);
-            float ex, ey;
-            if (projectToScreen(viewProj, edgePos, imgPos, imgSize, ex, ey)) {
-                float screenSize = std::abs(ex - cx) * 2.0f;
-                if (screenSize >= 20.0f) {
-                    const char* name = node->name.c_str();
-                    ImVec2 textSize = ImGui::CalcTextSize(name);
-
-                    float maxTextWidth = screenSize * 0.9f;
-                    if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
-                        float textX = cx - maxTextWidth * 0.5f;
-                        float textY = cy - textSize.y * 0.5f;
-                        drawList->PushClipRect(
-                            ImVec2(textX, textY),
-                            ImVec2(textX + maxTextWidth, textY + textSize.y),
-                            true
-                        );
-                        drawList->AddText(ImVec2(textX, textY), ThemeManager::instance().currentTheme().labelColor, name);
-                        drawList->PopClipRect();
-                    } else if (textSize.x <= maxTextWidth || screenSize > 40.0f) {
-                        float textX = cx - textSize.x * 0.5f;
-                        float textY = cy - textSize.y * 0.5f;
-                        drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), ThemeManager::instance().currentTheme().labelShadow, name);
-                        drawList->AddText(ImVec2(textX, textY), ThemeManager::instance().currentTheme().labelColor, name);
-                    }
-                }
-            }
+            // Label on top of platform
+            drawTreeVLabel(drawList, viewProj, imgPos, imgSize,
+                           glm::vec3(worldX, worldY, topZ), edgeOffset, name);
         }
 
         // Always recurse into expanded directories regardless of projection
@@ -668,8 +577,6 @@ void ViewportPanel::draw() {
             glm::mat4 viewProj = cachedProj * cachedView;
             if (mode == FSV_MAPV) {
                 drawMapVLabels(viewProj, imgPos_, imgSize_);
-            } else if (mode == FSV_DISCV) {
-                drawDiscVLabels(viewProj, imgPos_, imgSize_);
             } else if (mode == FSV_TREEV) {
                 drawTreeVLabels(viewProj, imgPos_, imgSize_);
             }
@@ -681,6 +588,13 @@ void ViewportPanel::draw() {
 
     // Handle keyboard navigation
     handleKeyboard();
+
+    // Context menu popup (must be within the Viewport window's Begin/End)
+    if (openContextMenu_) {
+        ImGui::OpenPopup("##ViewportContextMenu");
+        openContextMenu_ = false;
+    }
+    Dialogs::instance().drawContextMenuPopup("##ViewportContextMenu", contextMenuNode_);
 
     ImGui::End();
 }

@@ -5,6 +5,7 @@
 #include "core/FsNode.h"
 #include "core/Types.h"
 #include "ui/MainWindow.h"
+#include "ui/Dialogs.h"
 
 namespace fsvng {
 
@@ -100,10 +101,13 @@ void FileListPanel::draw() {
             bool isSelected = (child.get() == selectedNode_);
             if (ImGui::Selectable(child->name.c_str(), isSelected,
                                   ImGuiSelectableFlags_SpanAllColumns |
-                                  ImGuiSelectableFlags_AllowDoubleClick |
                                   ImGuiSelectableFlags_AllowOverlap)) {
                 selectedNode_ = child.get();
                 MainWindow::instance().navigateTo(child.get());
+            }
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                contextMenuNode_ = child.get();
+                selectedNode_ = child.get();
             }
 
             // Size column
@@ -123,6 +127,14 @@ void FileListPanel::draw() {
 
         ImGui::EndTable();
     }
+
+    // Context menu popup (within this window's scope)
+    if (contextMenuNode_) {
+        ImGui::OpenPopup("##FileListContextMenu");
+        contextMenuNode_pending_ = contextMenuNode_;
+        contextMenuNode_ = nullptr;
+    }
+    Dialogs::instance().drawContextMenuPopup("##FileListContextMenu", contextMenuNode_pending_);
 
     ImGui::End();
 }
