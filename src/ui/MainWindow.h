@@ -79,6 +79,9 @@ public:
     // Used by cross-pane drag-and-drop.
     void moveAcrossPanes(const std::string& srcPath, const std::string& destDirPath);
 
+    // Move the focused pane's File List selection to Trash, then refresh.
+    void trashSelection();
+
     // Per-scene application state. Owned by a Scene so each pane has its own
     // navigation, scan thread, watcher, search and view mode. Non-copyable
     // (holds a thread/mutex/watcher) — only ever referenced via pointer.

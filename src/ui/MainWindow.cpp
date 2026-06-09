@@ -517,6 +517,28 @@ void MainWindow::serviceScene() {
     }
 }
 
+void MainWindow::trashSelection() {
+    std::vector<std::string> paths = FileListPanel::instance().selectedPaths();
+    int trashed = 0, failed = 0;
+    std::string lastErr;
+    for (const std::string& p : paths) {
+        FileOps::Result r = FileOps::moveToTrash(p);
+        if (r.ok) ++trashed; else { ++failed; lastErr = r.error; }
+    }
+    if (trashed > 0) {
+        rescanAllPending_ = true;
+    }
+    char buf[256];
+    if (failed == 0) {
+        std::snprintf(buf, sizeof(buf), "Moved %d item%s to Trash",
+                      trashed, trashed == 1 ? "" : "s");
+    } else {
+        std::snprintf(buf, sizeof(buf), "Trashed %d, failed %d (%s)",
+                      trashed, failed, lastErr.c_str());
+    }
+    StatusBar::instance().setMessage(buf, "");
+}
+
 void MainWindow::draw() {
     SceneManager& sm = SceneManager::instance();
     Scene* focused = sm.focused();
@@ -660,18 +682,39 @@ void MainWindow::closeFocusedPane() {
     sm.closeFocused();
 }
 
-void MainWindow::moveAcrossPanes(const std::string& srcPath,
+void MainWindow::moveAcrossPanes(const std::string& srcPaths,
                                  const std::string& destDirPath) {
-    FileOps::Result r = FileOps::moveInto(srcPath, destDirPath);
-    if (r.ok) {
-        // Refresh every pane (source loses the entry, dest gains it). Deferred
-        // to the next frame so we don't re-scan mid-render. Each pane restores
-        // its own view by path.
-        rescanAllPending_ = true;
-        StatusBar::instance().setMessage("Moved to " + destDirPath, "");
-    } else {
-        StatusBar::instance().setMessage("Move failed: " + r.error, "");
+    // srcPaths may contain several newline-separated absolute paths (a
+    // multi-selection drag).
+    int moved = 0, failed = 0;
+    std::string lastErr;
+    size_t start = 0;
+    while (start <= srcPaths.size()) {
+        size_t nl = srcPaths.find('\n', start);
+        std::string one = srcPaths.substr(
+            start, nl == std::string::npos ? std::string::npos : nl - start);
+        if (!one.empty()) {
+            FileOps::Result r = FileOps::moveInto(one, destDirPath);
+            if (r.ok) ++moved; else { ++failed; lastErr = r.error; }
+        }
+        if (nl == std::string::npos) break;
+        start = nl + 1;
     }
+
+    if (moved > 0) {
+        // Refresh every pane (source loses entries, dest gains them). Deferred
+        // to the next frame so we don't re-scan mid-render.
+        rescanAllPending_ = true;
+    }
+    char buf[256];
+    if (failed == 0) {
+        std::snprintf(buf, sizeof(buf), "Moved %d item%s to %s",
+                      moved, moved == 1 ? "" : "s", destDirPath.c_str());
+    } else {
+        std::snprintf(buf, sizeof(buf), "Moved %d, failed %d (%s)",
+                      moved, failed, lastErr.c_str());
+    }
+    StatusBar::instance().setMessage(buf, "");
 }
 
 void MainWindow::setupDockspace() {

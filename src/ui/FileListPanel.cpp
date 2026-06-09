@@ -160,24 +160,72 @@ void FileListPanel::draw() {
 
             // Name column
             ImGui::TableSetColumnIndex(1);
-            bool isSelected = (child == s_->selectedNode_);
+            std::string childPath = child->absName();
+            bool isSelected = isPathSelected(childPath);
             if (ImGui::Selectable(child->name.c_str(), isSelected,
                                   ImGuiSelectableFlags_SpanAllColumns |
                                   ImGuiSelectableFlags_AllowOverlap)) {
-                s_->selectedNode_ = child;
-                MainWindow::instance().navigateTo(child);
+                ImGuiIO& io = ImGui::GetIO();
+                if (io.KeyCtrl) {
+                    // Toggle membership.
+                    if (s_->selectedPaths_.count(childPath)) {
+                        s_->selectedPaths_.erase(childPath);
+                    } else {
+                        s_->selectedPaths_.insert(childPath);
+                    }
+                    s_->anchorPath_ = childPath;
+                    s_->selectedNode_ = child;
+                } else if (io.KeyShift && !s_->anchorPath_.empty()) {
+                    // Range select from anchor to this row in sorted order.
+                    int ai = -1, ci = -1;
+                    for (int k = 0; k < (int)s_->sorted_.size(); ++k) {
+                        if (s_->sorted_[k] == child) ci = k;
+                        if (s_->sorted_[k]->absName() == s_->anchorPath_) ai = k;
+                    }
+                    if (ai >= 0 && ci >= 0) {
+                        s_->selectedPaths_.clear();
+                        int lo = std::min(ai, ci), hi = std::max(ai, ci);
+                        for (int k = lo; k <= hi; ++k) {
+                            s_->selectedPaths_.insert(s_->sorted_[k]->absName());
+                        }
+                    }
+                    s_->selectedNode_ = child;
+                } else {
+                    // Plain click: single-select and navigate.
+                    s_->selectedPaths_.clear();
+                    s_->selectedPaths_.insert(childPath);
+                    s_->anchorPath_ = childPath;
+                    s_->selectedNode_ = child;
+                    MainWindow::instance().navigateTo(child);
+                }
             }
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                // Right-click on an unselected row selects just it; on a
+                // selected row keeps the existing multi-selection.
+                if (!isPathSelected(childPath)) {
+                    s_->selectedPaths_.clear();
+                    s_->selectedPaths_.insert(childPath);
+                    s_->anchorPath_ = childPath;
+                }
                 s_->contextMenuNode_ = child;
                 s_->selectedNode_ = child;
             }
 
-            // Drag source: carry the entry's absolute path (pointers don't
-            // survive the rescan a move triggers).
+            // Drag source: carry the selected paths (newline-separated) when
+            // dragging a member of a multi-selection, else just this entry.
             if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-                std::string p = child->absName();
-                ImGui::SetDragDropPayload("FSVNG_NODE", p.c_str(), p.size());
-                ImGui::Text("Move %s", child->name.c_str());
+                std::string payload;
+                if (isPathSelected(childPath) && selectionCount() > 1) {
+                    for (const auto& p : s_->selectedPaths_) {
+                        payload += p;
+                        payload += '\n';
+                    }
+                    ImGui::Text("Move %d items", selectionCount());
+                } else {
+                    payload = childPath;
+                    ImGui::Text("Move %s", child->name.c_str());
+                }
+                ImGui::SetDragDropPayload("FSVNG_NODE", payload.data(), payload.size());
                 ImGui::EndDragDropSource();
             }
             // Drop target: dropping onto a directory row moves into it.
@@ -231,6 +279,8 @@ void FileListPanel::showEntry(FsNode* node) {
 void FileListPanel::showDirectory(FsNode* dirNode) {
     s_->currentDir_ = dirNode;
     s_->selectedNode_ = nullptr;
+    s_->selectedPaths_.clear();
+    s_->anchorPath_.clear();
     s_->sortDirty_ = true;
 }
 

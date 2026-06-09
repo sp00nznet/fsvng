@@ -22,6 +22,7 @@
 #include "core/FileOps.h"
 #include "ui/MainWindow.h"
 #include "ui/DirTreePanel.h"
+#include "ui/FileListPanel.h"
 #include "ui/StatusBar.h"
 #include "geometry/CollapseExpand.h"
 #include "camera/Camera.h"
@@ -385,13 +386,28 @@ void Dialogs::drawContextMenuPopup(const char* popupId, FsNode* node) {
                 showRename_ = true;
             }
 
+            // Batch trash when this node is part of a multi-selection.
+            int selCount = FileListPanel::instance().selectionCount();
+            bool batch = (selCount > 1 &&
+                          FileListPanel::instance().isPathSelected(node->absName()));
             bool canTrash = FileOps::trashAvailable() && !isRoot;
-            if (ImGui::MenuItem("Move to Trash", nullptr, false, canTrash)) {
-                FileOps::Result r = FileOps::moveToTrash(node->absName());
-                if (r.ok) {
-                    MainWindow::instance().rescanCurrentRoot();
+            char trashLabel[64];
+            if (batch) {
+                std::snprintf(trashLabel, sizeof(trashLabel),
+                              "Move %d Items to Trash", selCount);
+            } else {
+                std::snprintf(trashLabel, sizeof(trashLabel), "Move to Trash");
+            }
+            if (ImGui::MenuItem(trashLabel, nullptr, false, canTrash)) {
+                if (batch) {
+                    MainWindow::instance().trashSelection();
                 } else {
-                    StatusBar::instance().setMessage("Trash failed: " + r.error, "");
+                    FileOps::Result r = FileOps::moveToTrash(node->absName());
+                    if (r.ok) {
+                        MainWindow::instance().rescanCurrentRoot();
+                    } else {
+                        StatusBar::instance().setMessage("Trash failed: " + r.error, "");
+                    }
                 }
             }
             if (!canTrash && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
