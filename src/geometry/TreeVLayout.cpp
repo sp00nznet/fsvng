@@ -281,7 +281,7 @@ void TreeVLayout::init() {
     }
 
     // Store core radius in GeometryManager
-    GeometryManager::instance().treevCoreRadius_ = coreRadius_;
+    GeometryManager::instance().setTreevCoreRadius(coreRadius_);
 
     // Initial cursor state
     getCorners(rootDir, &cursorPrevC0_, &cursorPrevC1_);
@@ -905,7 +905,8 @@ bool TreeVLayout::drawRecursive(FsNode* dnode, const glm::mat4& view,
                 buildFolderMesh(dnode, prevR0, verts, inds);
 
                 if (!verts.empty()) {
-                    float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity;
+                    float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity
+                                   + (dnode->searchMatch ? 1.2f : 0.0f);
                     ShaderProgram& shader = Renderer::instance().getNodeShader();
                     shader.use();
                     shader.setMat4("uModel", ms.top());
@@ -948,7 +949,8 @@ bool TreeVLayout::drawRecursive(FsNode* dnode, const glm::mat4& view,
         }
 
         if (!verts.empty()) {
-            float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity;
+            float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity
+                           + (dnode->searchMatch ? 1.2f : 0.0f);
             ShaderProgram& shader = Renderer::instance().getNodeShader();
             shader.use();
             shader.setMat4("uModel", ms.top());
@@ -1001,7 +1003,8 @@ bool TreeVLayout::drawRecursive(FsNode* dnode, const glm::mat4& view,
         }
 
         if (!branchVerts.empty()) {
-            float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity;
+            float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity
+                           + (dnode->searchMatch ? 1.2f : 0.0f);
             ShaderProgram& shader = Renderer::instance().getNodeShader();
             shader.use();
             shader.setMat4("uModel", ms.top());
@@ -1039,7 +1042,7 @@ void TreeVLayout::draw(const glm::mat4& view, const glm::mat4& projection, bool 
     // Arrange if needed
     if (gm.lowDrawStage() == 0 || gm.highDrawStage() == 0) {
         arrange(false);
-        gm.treevCoreRadius_ = coreRadius_;
+        gm.setTreevCoreRadius(coreRadius_);
     }
 
     // Draw starting from rootDir (skip metanode so children fill first ring)

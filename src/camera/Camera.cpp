@@ -41,13 +41,13 @@ static void panStepCb(Morph* /*morph*/) {
 static void panEndCb(Morph* /*morph*/) {
     Animation::instance().requestRedraw();
     Camera::instance().panBreak();  // Clean up any remaining morphs
-    // Note: moving_ is set to false in lookAtFull's end callback below
+    // Note: s_->moving_ is set to false in lookAtFull's end callback below
 }
 
 // Internal end callback that also clears the moving flag
 static void masterPanEndCb(Morph* /*morph*/) {
     Animation::instance().requestRedraw();
-    // The Camera singleton's moving_ flag can't be set directly from
+    // The Camera singleton's s_->moving_ flag can't be set directly from
     // a free function. Instead we use a scheduled event approach below.
 }
 
@@ -56,7 +56,7 @@ static void masterPanEndCb(Morph* /*morph*/) {
 // ============================================================================
 
 void Camera::init(FsvMode mode, bool initialView) {
-    currentMode_ = mode;
+    s_->currentMode_ = mode;
 
     CameraState& cam = state();
     cam.fov = 60.0;
@@ -115,10 +115,26 @@ void Camera::init(FsvMode mode, bool initialView) {
             break;
     }
 
-    moving_ = false;
-    birdseyeActive_ = false;
-    history_.clear();
-    currentNode_ = rootDir;
+    s_->moving_ = false;
+    s_->birdseyeActive_ = false;
+    s_->history_.clear();
+    s_->currentNode_ = rootDir;
+}
+
+// ============================================================================
+// Save / restore camera state (preserve view across a rescan)
+// ============================================================================
+
+void Camera::saveState() {
+    s_->savedCamera_ = s_->currentCamera_;
+    s_->hasSavedState_ = true;
+}
+
+void Camera::restoreState() {
+    if (!s_->hasSavedState_) return;
+    s_->currentCamera_ = s_->savedCamera_;
+    s_->moving_ = false;
+    s_->hasSavedState_ = false;
 }
 
 // ============================================================================
@@ -137,7 +153,7 @@ void Camera::panFinish() {
     me.morphFinish(&cam.farClip);
     me.morphFinish(&cam.panPart);
 
-    switch (currentMode_) {
+    switch (s_->currentMode_) {
         case FSV_MAPV:
             me.morphFinish(&mapvState().target.x);
             me.morphFinish(&mapvState().target.y);
@@ -165,7 +181,7 @@ void Camera::panBreak() {
     me.morphBreak(&cam.farClip);
     me.morphBreak(&cam.panPart);
 
-    switch (currentMode_) {
+    switch (s_->currentMode_) {
         case FSV_MAPV:
             me.morphBreak(&mapvState().target.x);
             me.morphBreak(&mapvState().target.y);
@@ -477,8 +493,8 @@ void Camera::lookAtFull(FsNode* node, MorphType mtype, double panTimeOverride) {
     auto& me = MorphEngine::instance();
 
     // Leave bird's-eye view if active
-    if (birdseyeActive_) {
-        birdseyeActive_ = false;
+    if (s_->birdseyeActive_) {
+        s_->birdseyeActive_ = false;
     }
 
     // Halt any ongoing camera pan
@@ -486,7 +502,7 @@ void Camera::lookAtFull(FsNode* node, MorphType mtype, double panTimeOverride) {
 
     double panTime = 0.0;
 
-    switch (currentMode_) {
+    switch (s_->currentMode_) {
         case FSV_MAPV:
             panTime = mapvLookAt(node, mtype, panTimeOverride);
             break;
@@ -512,44 +528,44 @@ void Camera::lookAtFull(FsNode* node, MorphType mtype, double panTimeOverride) {
         // End callback
         [](Morph* /*m*/) {
             Animation::instance().requestRedraw();
-            Camera::instance().moving_ = false;
+            Camera::instance().s_->moving_ = false;
         },
         node
     );
 
     // Update visited node history
     bool backtracking = false;
-    if (!history_.empty()) {
-        FsNode* prevNode = history_.front();
+    if (!s_->history_.empty()) {
+        FsNode* prevNode = s_->history_.front();
         if (prevNode == nullptr) {
             // Camera is backtracking
-            history_.erase(history_.begin());
+            s_->history_.erase(s_->history_.begin());
             backtracking = true;
         }
     }
-    if (!backtracking && node != currentNode_ &&
-        (history_.empty() || currentNode_ != history_.front())) {
-        history_.insert(history_.begin(), currentNode_);
+    if (!backtracking && node != s_->currentNode_ &&
+        (s_->history_.empty() || s_->currentNode_ != s_->history_.front())) {
+        s_->history_.insert(s_->history_.begin(), s_->currentNode_);
     }
 
     // New current node of interest
-    currentNode_ = node;
+    s_->currentNode_ = node;
 
     // Camera is under programmatic control now
     cam.manualControl = false;
 
-    moving_ = true;
+    s_->moving_ = true;
 }
 
 void Camera::lookAtPrevious() {
     // Can't backtrack if history is empty
-    if (history_.empty()) return;
+    if (s_->history_.empty()) return;
 
     // Get previously visited node
-    FsNode* prevNode = history_.front();
+    FsNode* prevNode = s_->history_.front();
 
     // Mark current history entry as null (backtracking marker)
-    history_.front() = nullptr;
+    s_->history_.front() = nullptr;
     lookAt(prevNode);
 }
 
@@ -563,8 +579,8 @@ void Camera::treevLpanLookAt(FsNode* node, double panTimeOverride) {
     auto& me = MorphEngine::instance();
 
     // Leave bird's-eye view if active
-    if (birdseyeActive_) {
-        birdseyeActive_ = false;
+    if (s_->birdseyeActive_) {
+        s_->birdseyeActive_ = false;
     }
 
     // Construct desired camera state (stage 1: angular alignment)
@@ -649,7 +665,7 @@ void Camera::treevLpanLookAt(FsNode* node, double panTimeOverride) {
     );
 
     cam.manualControl = false;
-    moving_ = true;
+    s_->moving_ = true;
 }
 
 // ============================================================================
@@ -687,7 +703,7 @@ void Camera::pan(double dx, double dy) {
     CameraState& cam = state();
     double scale = cam.distance / 800.0;
 
-    switch (currentMode_) {
+    switch (s_->currentMode_) {
         case FSV_MAPV: {
             double sinTheta = std::sin(rad(cam.theta));
             double cosTheta = std::cos(rad(cam.theta));
@@ -717,7 +733,7 @@ void Camera::birdseyeView(bool goingUp) {
 
     // Determine length of pan
     double panTime = 0.0;
-    switch (currentMode_) {
+    switch (s_->currentMode_) {
         case FSV_MAPV:  panTime = MAPV_MAX_PAN_TIME;  break;
         case FSV_TREEV: panTime = TREEV_MAX_PAN_TIME;  break;
         default: return;
@@ -725,7 +741,7 @@ void Camera::birdseyeView(bool goingUp) {
 
     if (goingUp) {
         // Save current camera state
-        std::memcpy(&preBirdseyeCamera_, &currentCamera_, sizeof(AnyCameraState));
+        std::memcpy(&s_->preBirdseyeCamera_, &s_->currentCamera_, sizeof(SceneState::AnyCameraState));
 
         // Build bird's-eye view
         double newPhi = 90.0;
@@ -734,7 +750,7 @@ void Camera::birdseyeView(bool goingUp) {
 
         FsNode* rootDir = FsTree::instance().rootDir();
 
-        switch (currentMode_) {
+        switch (s_->currentMode_) {
             case FSV_MAPV: {
                 double rootWidth = 1000.0;
                 if (rootDir) {
@@ -763,10 +779,10 @@ void Camera::birdseyeView(bool goingUp) {
         me.morph(&cam.nearClip, MorphType::SigmoidAccel, newNearClip, panTime);
         me.morph(&cam.farClip, MorphType::SigmoidAccel, newFarClip, panTime);
 
-        birdseyeActive_ = true;
+        s_->birdseyeActive_ = true;
     } else {
         // Restore pre-bird's-eye-view camera state
-        CameraState* preCam = reinterpret_cast<CameraState*>(&preBirdseyeCamera_);
+        CameraState* preCam = reinterpret_cast<CameraState*>(&s_->preBirdseyeCamera_);
 
         me.morph(&cam.theta, MorphType::Sigmoid, preCam->theta, panTime);
         me.morph(&cam.phi, MorphType::Sigmoid, preCam->phi, panTime);
@@ -774,16 +790,16 @@ void Camera::birdseyeView(bool goingUp) {
         me.morph(&cam.nearClip, MorphType::Sigmoid, preCam->nearClip, panTime);
         me.morph(&cam.farClip, MorphType::Sigmoid, preCam->farClip, panTime);
 
-        switch (currentMode_) {
+        switch (s_->currentMode_) {
             case FSV_MAPV: {
-                MapVCameraState* pre = &preBirdseyeCamera_.mapv;
+                MapVCameraState* pre = &s_->preBirdseyeCamera_.mapv;
                 me.morph(&mapvState().target.x, MorphType::Sigmoid, pre->target.x, panTime);
                 me.morph(&mapvState().target.y, MorphType::Sigmoid, pre->target.y, panTime);
                 me.morph(&mapvState().target.z, MorphType::Sigmoid, pre->target.z, panTime);
                 break;
             }
             case FSV_TREEV: {
-                TreeVCameraState* pre = &preBirdseyeCamera_.treev;
+                TreeVCameraState* pre = &s_->preBirdseyeCamera_.treev;
                 me.morph(&treevState().target.r, MorphType::Sigmoid, pre->target.r, panTime);
                 me.morph(&treevState().target.theta, MorphType::Sigmoid, pre->target.theta, panTime);
                 me.morph(&treevState().target.z, MorphType::Sigmoid, pre->target.z, panTime);
@@ -793,7 +809,7 @@ void Camera::birdseyeView(bool goingUp) {
                 break;
         }
 
-        birdseyeActive_ = false;
+        s_->birdseyeActive_ = false;
     }
 
     // Master morph
@@ -804,12 +820,12 @@ void Camera::birdseyeView(bool goingUp) {
         },
         [](Morph* /*m*/) {
             Animation::instance().requestRedraw();
-            Camera::instance().moving_ = false;
+            Camera::instance().s_->moving_ = false;
         },
         nullptr
     );
 
-    moving_ = true;
+    s_->moving_ = true;
 }
 
 // ============================================================================
@@ -820,7 +836,7 @@ glm::mat4 Camera::getViewMatrix() const {
     const CameraState& cam = state();
     glm::dvec3 eye, target, up;
 
-    switch (currentMode_) {
+    switch (s_->currentMode_) {
         case FSV_MAPV: {
             // MapV: target is XYZ, camera orbits using theta/phi/distance spherical coords
             const MapVCameraState& mcam = mapvState();

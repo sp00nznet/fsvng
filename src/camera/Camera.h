@@ -39,6 +39,31 @@ class Camera {
 public:
     static Camera& instance();
 
+    // Per-scene camera state. Heap-stable (owned by a Scene) so that the
+    // double* pointers captured by morph animations and the history vector
+    // stay valid and unique per pane. Camera points at the active one.
+    struct SceneState {
+        // Camera state union (MapV vs TreeV share storage).
+        union AnyCameraState {
+            MapVCameraState mapv;
+            TreeVCameraState treev;
+            AnyCameraState() : mapv{} {}
+        };
+        AnyCameraState currentCamera_;
+        AnyCameraState preBirdseyeCamera_;
+        AnyCameraState savedCamera_;
+        bool hasSavedState_ = false;
+        FsvMode currentMode_ = FSV_NONE;
+        bool moving_ = false;
+        bool birdseyeActive_ = false;
+        std::vector<FsNode*> history_;
+        FsNode* currentNode_ = nullptr;
+    };
+
+    // Re-point Camera at a scene's state (nullptr restores the default).
+    void setSceneState(SceneState* s) { s_ = s ? s : &defaultState_; }
+    SceneState* sceneState() { return s_; }
+
     void init(FsvMode mode, bool initialView);
 
     // Point camera at node with morph animation
@@ -59,28 +84,33 @@ public:
     void panFinish();
     void panBreak();
 
-    bool isMoving() const { return moving_; }
-    bool isBirdseyeActive() const { return birdseyeActive_; }
+    bool isMoving() const { return s_->moving_; }
+    bool isBirdseyeActive() const { return s_->birdseyeActive_; }
 
     // Get the view matrix for rendering
     glm::mat4 getViewMatrix() const;
     glm::mat4 getProjectionMatrix(float aspectRatio) const;
 
     // Access camera state
-    CameraState& state() { return *reinterpret_cast<CameraState*>(&currentCamera_); }
-    const CameraState& state() const { return *reinterpret_cast<const CameraState*>(&currentCamera_); }
+    CameraState& state() { return *reinterpret_cast<CameraState*>(&s_->currentCamera_); }
+    const CameraState& state() const { return *reinterpret_cast<const CameraState*>(&s_->currentCamera_); }
 
-    MapVCameraState& mapvState() { return currentCamera_.mapv; }
-    TreeVCameraState& treevState() { return currentCamera_.treev; }
+    MapVCameraState& mapvState() { return s_->currentCamera_.mapv; }
+    TreeVCameraState& treevState() { return s_->currentCamera_.treev; }
 
-    const MapVCameraState& mapvState() const { return currentCamera_.mapv; }
-    const TreeVCameraState& treevState() const { return currentCamera_.treev; }
+    const MapVCameraState& mapvState() const { return s_->currentCamera_.mapv; }
+    const TreeVCameraState& treevState() const { return s_->currentCamera_.treev; }
+
+    // Snapshot / restore the full camera state. Used to preserve the view
+    // across a rescan (e.g. after a file operation or live refresh).
+    void saveState();
+    void restoreState();
 
     // Get the current mode (set during init)
-    FsvMode currentMode() const { return currentMode_; }
+    FsvMode currentMode() const { return s_->currentMode_; }
 
     // Get current node of interest
-    FsNode* currentNode() const { return currentNode_; }
+    FsNode* currentNode() const { return s_->currentNode_; }
 
 private:
     Camera() = default;
@@ -94,23 +124,10 @@ private:
     void mapvGetCameraPosition(const CameraState* cam, const XYZvec* target, XYZvec* pos) const;
     void treevGetCameraPosition(const CameraState* cam, const RTZvec* target, RTZvec* pos) const;
 
-    // Camera state union
-    union AnyCameraState {
-        MapVCameraState mapv;
-        TreeVCameraState treev;
-        AnyCameraState() : mapv{} {}
-    };
-
-    AnyCameraState currentCamera_;
-    AnyCameraState preBirdseyeCamera_;
-
-    FsvMode currentMode_ = FSV_NONE;
-    bool moving_ = false;
-    bool birdseyeActive_ = false;
-
-    // History
-    std::vector<FsNode*> history_;
-    FsNode* currentNode_ = nullptr;
+    // Default per-scene state used when no Scene is active (single-pane and
+    // tests). Scenes provide their own SceneState via setSceneState().
+    SceneState defaultState_;
+    SceneState* s_ = &defaultState_;
 
     // Pan timing constants
     static constexpr double MAPV_MIN_PAN_TIME = 0.5;

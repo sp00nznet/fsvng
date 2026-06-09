@@ -469,7 +469,8 @@ void MapVLayout::drawRecursive(FsNode* dnode, const glm::mat4& view,
 
     if (geometry) {
         // Draw directory face or geometry of children
-        float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity;
+        float nodeGlow = ThemeManager::instance().currentTheme().baseEmissive + dnode->glowIntensity
+                       + (dnode->searchMatch ? 1.2f : 0.0f);
 
         // Rebuild mesh each frame (to be optimized with mesh caching)
         std::vector<Vertex> vertices;

@@ -1,6 +1,9 @@
 #include "Renderer.h"
 
+#include "core/PlatformUtils.h"
+
 #include <glm/gtc/matrix_transform.hpp>
+#include <filesystem>
 #include <iostream>
 
 namespace fsvng {
@@ -105,8 +108,16 @@ void Renderer::renderFrame(GLuint targetFBO, int width, int height) {
 }
 
 void Renderer::loadShaders() {
-    // Shader file paths (relative to working directory)
-    const std::string shaderDir = "shaders/";
+    // Resolve the shaders directory. The build copies shaders next to the
+    // executable, so prefer <exe dir>/shaders and fall back to ./shaders for
+    // dev runs launched from a source/working tree.
+    namespace fs = std::filesystem;
+    std::string shaderDir = "shaders/";
+    fs::path exeShaders = fs::path(PlatformUtils::getExecutableDir()) / "shaders";
+    std::error_code ec;
+    if (fs::is_directory(exeShaders, ec)) {
+        shaderDir = exeShaders.string() + "/";
+    }
 
     if (!nodeShader_.loadFromFiles(shaderDir + "node.vert", shaderDir + "node.frag")) {
         std::cerr << "Renderer: Failed to load node shader" << std::endl;

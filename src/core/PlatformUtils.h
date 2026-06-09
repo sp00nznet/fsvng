@@ -42,5 +42,10 @@ namespace PlatformUtils {
     // Format a time_t as a human-readable string.
     std::string formatTime(time_t t);
 
+    // Absolute path of the directory containing the running executable
+    // (no trailing separator). Used to locate bundled assets like shaders
+    // regardless of the current working directory. Returns "." on failure.
+    std::string getExecutableDir();
+
 } // namespace PlatformUtils
 } // namespace fsvng

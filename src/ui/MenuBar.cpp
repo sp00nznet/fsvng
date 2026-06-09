@@ -41,6 +41,15 @@ void MenuBar::drawFileMenu() {
             MainWindow::instance().requestScan(Config::instance().defaultPath);
         }
         ImGui::Separator();
+        bool showHidden = MainWindow::instance().getShowHidden();
+        if (ImGui::MenuItem("Show Hidden Files", nullptr, showHidden)) {
+            MainWindow::instance().setShowHidden(!showHidden);
+        }
+        bool autoRefresh = MainWindow::instance().getAutoRefresh();
+        if (ImGui::MenuItem("Auto-refresh on Changes", nullptr, autoRefresh)) {
+            MainWindow::instance().setAutoRefresh(!autoRefresh);
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4")) {
             SDL_Event quitEvent;
             quitEvent.type = SDL_QUIT;

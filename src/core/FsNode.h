@@ -69,6 +69,11 @@ public:
     // Transient glow intensity (set by PulseEffect each frame, not persisted)
     float glowIntensity = 0.0f;
 
+    // Set when the node matches the active search query; boosts emissive so
+    // matches stand out in the 3D scene. Independent of glowIntensity so the
+    // pulse animation can't clear it.
+    bool searchMatch = false;
+
     // Directory-specific fields (from DirNodeDesc)
     double deployment = 0.0;  // 0 = collapsed, 1 = expanded
 

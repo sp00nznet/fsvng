@@ -43,11 +43,11 @@ GeometryManager& GeometryManager::instance() {
 }
 
 void GeometryManager::init(FsvMode mode) {
-    mode_ = mode;
+    s_->mode_ = mode;
 
     // Reset draw stages
-    lowDrawStage_ = 0;
-    highDrawStage_ = 0;
+    s_->lowDrawStage_ = 0;
+    s_->highDrawStage_ = 0;
 
     FsTree& tree = FsTree::instance();
     FsNode* root = tree.root();
@@ -70,7 +70,7 @@ void GeometryManager::init(FsvMode mode) {
 }
 
 void GeometryManager::draw(const glm::mat4& view, const glm::mat4& projection, bool highDetail) {
-    switch (mode_) {
+    switch (s_->mode_) {
         case FSV_MAPV:
             MapVLayout::instance().draw(view, projection, highDetail);
             break;
@@ -83,7 +83,7 @@ void GeometryManager::draw(const glm::mat4& view, const glm::mat4& projection, b
 }
 
 void GeometryManager::drawForPicking(const glm::mat4& view, const glm::mat4& projection) {
-    switch (mode_) {
+    switch (s_->mode_) {
         case FSV_MAPV:
             MapVLayout::instance().drawForPicking(view, projection);
             break;
@@ -104,12 +104,12 @@ void GeometryManager::queueRebuild(FsNode* dnode) {
 }
 
 void GeometryManager::queueUncachedDraw() {
-    lowDrawStage_ = 0;
-    highDrawStage_ = 0;
+    s_->lowDrawStage_ = 0;
+    s_->highDrawStage_ = 0;
 }
 
 void GeometryManager::cameraPanFinished() {
-    switch (mode_) {
+    switch (s_->mode_) {
         case FSV_MAPV:
             MapVLayout::instance().cameraPanFinished();
             break;
@@ -127,7 +127,7 @@ void GeometryManager::colexpInitiated(FsNode* dnode) {
     // A newly expanding directory in TreeV mode will probably
     // need (re)shaping (it may be appearing for the first time,
     // or its inner radius may have changed)
-    if (dnode->isCollapsed() && mode_ == FSV_TREEV) {
+    if (dnode->isCollapsed() && s_->mode_ == FSV_TREEV) {
         TreeVLayout::instance().reshapePlatformPublic(dnode,
             treevPlatformR0(dnode));
     }
@@ -144,16 +144,16 @@ void GeometryManager::colexpInProgress(FsNode* dnode) {
         queueUncachedDraw();
     }
 
-    if (mode_ == FSV_TREEV) {
+    if (s_->mode_ == FSV_TREEV) {
         // Take care of shifting angles
         TreeVLayout::instance().queueRearrange(dnode);
     }
 }
 
 void GeometryManager::freeAll() {
-    highlightNode_ = nullptr;
-    lowDrawStage_ = 0;
-    highDrawStage_ = 0;
+    s_->highlightNode_ = nullptr;
+    s_->lowDrawStage_ = 0;
+    s_->highDrawStage_ = 0;
 }
 
 bool GeometryManager::shouldHighlight(FsNode* node) const {
@@ -162,7 +162,7 @@ bool GeometryManager::shouldHighlight(FsNode* node) const {
     if (!node->isDir())
         return true;
 
-    switch (mode_) {
+    switch (s_->mode_) {
         case FSV_MAPV:
             return node->isCollapsed();
         case FSV_TREEV:
@@ -222,7 +222,7 @@ bool GeometryManager::treevIsLeaf(FsNode* node) const {
 
 double GeometryManager::treevPlatformR0(FsNode* dnode) const {
     if (dnode->isMetanode())
-        return treevCoreRadius_;
+        return s_->treevCoreRadius_;
 
     double r0 = 0.0;
     FsNode* upNode = dnode->parent;
@@ -231,7 +231,7 @@ double GeometryManager::treevPlatformR0(FsNode* dnode) const {
         r0 += upNode->treevGeom.platform.depth;
         upNode = upNode->parent;
     }
-    r0 += treevCoreRadius_;
+    r0 += s_->treevCoreRadius_;
 
     return r0;
 }

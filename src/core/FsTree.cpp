@@ -11,50 +11,50 @@ FsTree& FsTree::instance() {
 }
 
 FsNode* FsTree::root() const {
-    return root_.get();
+    return s_->root_.get();
 }
 
 FsNode* FsTree::rootDir() const {
-    if (root_ && !root_->children.empty()) {
-        return root_->children[0].get();
+    if (s_->root_ && !s_->root_->children.empty()) {
+        return s_->root_->children[0].get();
     }
     return nullptr;
 }
 
 void FsTree::setRoot(std::unique_ptr<FsNode> root) {
     // Clear old lookup tables (they reference the old tree)
-    nodeTable_.clear();
-    pathTable_.clear();
-    root_ = std::move(root);
+    s_->nodeTable_.clear();
+    s_->pathTable_.clear();
+    s_->root_ = std::move(root);
 }
 
 void FsTree::clear() {
-    root_.reset();
-    nodeTable_.clear();
-    pathTable_.clear();
-    nextId_ = 0;
+    s_->root_.reset();
+    s_->nodeTable_.clear();
+    s_->pathTable_.clear();
+    s_->nextId_ = 0;
 }
 
 FsNode* FsTree::nodeById(unsigned int id) const {
-    if (id < nodeTable_.size()) {
-        return nodeTable_[id];
+    if (id < s_->nodeTable_.size()) {
+        return s_->nodeTable_[id];
     }
     return nullptr;
 }
 
 FsNode* FsTree::nodeByPath(const std::string& absname) const {
-    auto it = pathTable_.find(absname);
-    if (it != pathTable_.end()) {
+    auto it = s_->pathTable_.find(absname);
+    if (it != s_->pathTable_.end()) {
         return it->second;
     }
     return nullptr;
 }
 
 void FsTree::buildNodeTable() {
-    nodeTable_.clear();
-    pathTable_.clear();
+    s_->nodeTable_.clear();
+    s_->pathTable_.clear();
 
-    if (!root_) {
+    if (!s_->root_) {
         return;
     }
 
@@ -72,11 +72,11 @@ void FsTree::buildNodeTable() {
         }
     };
     IdFinder finder{maxId};
-    finder.visit(root_.get());
-    nextId_ = maxId + 1;
+    finder.visit(s_->root_.get());
+    s_->nextId_ = maxId + 1;
 
     // Resize table to hold all IDs.
-    nodeTable_.resize(nextId_, nullptr);
+    s_->nodeTable_.resize(s_->nextId_, nullptr);
 
     // Populate via recursive traversal.
     struct Populator {
@@ -97,13 +97,13 @@ void FsTree::buildNodeTable() {
         }
     };
 
-    Populator pop{nodeTable_, pathTable_};
-    pop.visit(root_.get());
+    Populator pop{s_->nodeTable_, s_->pathTable_};
+    pop.visit(s_->root_.get());
 }
 
 void FsTree::setupTree() {
-    if (root_) {
-        setupRecursive(root_.get());
+    if (s_->root_) {
+        setupRecursive(s_->root_.get());
         buildNodeTable();
     }
 }

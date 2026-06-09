@@ -39,6 +39,10 @@ public:
     // Set to true from another thread to cancel a running scan
     std::atomic<bool> cancelRequested{false};
 
+    // When false (default), dotfiles (names beginning with '.') are skipped,
+    // matching the conventional "hidden files" behavior of file explorers.
+    bool showHidden = false;
+
 private:
     // Recursively process a directory, adding children to parentNode.
     void processDir(const std::filesystem::path& dirPath, FsNode* parentNode, int depth);

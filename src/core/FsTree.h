@@ -17,6 +17,19 @@ class FsTree {
 public:
     static FsTree& instance();
 
+    // Per-scene tree storage. Owned by a Scene so each pane has its own tree
+    // and lookup tables; FsTree points at the active one.
+    struct SceneState {
+        std::unique_ptr<FsNode> root_;
+        std::vector<FsNode*> nodeTable_;
+        std::unordered_map<std::string, FsNode*> pathTable_;
+        unsigned int nextId_ = 0;
+    };
+
+    // Re-point FsTree at a scene's state (nullptr restores the default).
+    void setSceneState(SceneState* s) { s_ = s ? s : &defaultState_; }
+    SceneState* sceneState() { return s_; }
+
     // Access the metanode (root of the internal tree structure).
     FsNode* root() const;
 
@@ -42,10 +55,10 @@ public:
     void setupTree();
 
     // Current number of allocated node IDs.
-    unsigned int nodeCount() const { return nextId_; }
+    unsigned int nodeCount() const { return s_->nextId_; }
 
     // Allocate the next unique node ID.
-    unsigned int allocateId() { return nextId_++; }
+    unsigned int allocateId() { return s_->nextId_++; }
 
 private:
     FsTree() = default;
@@ -58,10 +71,8 @@ private:
     // Sort a directory node's children: dirs first, then by size desc, then alpha.
     static void sortChildren(FsNode* node);
 
-    std::unique_ptr<FsNode> root_;
-    std::vector<FsNode*> nodeTable_;
-    std::unordered_map<std::string, FsNode*> pathTable_;
-    unsigned int nextId_ = 0;
+    SceneState defaultState_;
+    SceneState* s_ = &defaultState_;
 };
 
 } // namespace fsvng

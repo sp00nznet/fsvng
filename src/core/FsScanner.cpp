@@ -102,6 +102,14 @@ void FsScanner::processDir(const std::filesystem::path& dirPath, FsNode* parentN
             continue;
         }
 
+        // Skip hidden (dotfile) entries unless the user opted to show them.
+        // Skipping a directory here also prunes its entire subtree.
+        if (!showHidden && !node->name.empty() && node->name[0] == '.') {
+            dirIt.increment(ec);
+            if (ec) break;
+            continue;
+        }
+
         node->type = classifyFileType(status.type());
 
         // Populate size, timestamps, permissions.

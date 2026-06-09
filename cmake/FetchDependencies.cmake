@@ -45,7 +45,21 @@ FetchContent_Declare(
 )
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(SDL2 glm glad imgui json)
+# stb (single-header image loader) for the file preview panel
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+)
+
+FetchContent_MakeAvailable(SDL2 glm glad imgui json stb)
+
+# stb has no CMake; expose its headers as an interface target.
+if(NOT TARGET stb_image)
+    add_library(stb_image INTERFACE)
+    target_include_directories(stb_image INTERFACE ${stb_SOURCE_DIR})
+endif()
 
 # Build glad as a library
 if(NOT TARGET glad_gl_core_33)

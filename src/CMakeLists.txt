@@ -3,6 +3,8 @@ set(FSVNG_CORE_SOURCES
     core/FsNode.cpp
     core/FsTree.cpp
     core/FsScanner.cpp
+    core/FsWatcher.cpp
+    core/FileOps.cpp
     core/PlatformUtils.cpp
     animation/Morph.cpp
     animation/Animation.cpp
@@ -15,6 +17,10 @@ add_library(fsvng_core STATIC ${FSVNG_CORE_SOURCES})
 target_include_directories(fsvng_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fsvng_core PUBLIC glm::glm nlohmann_json::nlohmann_json)
 
+# FsWatcher uses std::thread (inotify backend on Linux).
+find_package(Threads REQUIRED)
+target_link_libraries(fsvng_core PUBLIC Threads::Threads)
+
 if(WIN32)
     target_link_libraries(fsvng_core PRIVATE advapi32)
 endif()
@@ -24,6 +30,7 @@ set(FSVNG_SOURCES
     main.cpp
     app/App.cpp
     app/Config.cpp
+    scene/SceneManager.cpp
     camera/Camera.cpp
     renderer/ShaderProgram.cpp
     renderer/MeshBuffer.cpp
@@ -46,6 +53,7 @@ set(FSVNG_SOURCES
     ui/Dialogs.cpp
     ui/ThemeManager.cpp
     ui/PulseEffect.cpp
+    ui/PreviewPanel.cpp
 )
 
 add_executable(fsvng ${FSVNG_SOURCES})
@@ -55,6 +63,7 @@ target_link_libraries(fsvng PRIVATE
     SDL2::SDL2-static
     SDL2::SDL2main
     glad_gl_core_33
+    stb_image
     imgui_lib
 )
 

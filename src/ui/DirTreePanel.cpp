@@ -26,12 +26,12 @@ void DirTreePanel::draw() {
     }
 
     // Context menu popup (within this window's scope)
-    if (contextMenuNode_) {
+    if (s_->contextMenuNode_) {
         ImGui::OpenPopup("##DirTreeContextMenu");
-        contextMenuNode_pending_ = contextMenuNode_;
-        contextMenuNode_ = nullptr;
+        s_->contextMenuNode_pending_ = s_->contextMenuNode_;
+        s_->contextMenuNode_ = nullptr;
     }
-    Dialogs::instance().drawContextMenuPopup("##DirTreeContextMenu", contextMenuNode_pending_);
+    Dialogs::instance().drawContextMenuPopup("##DirTreeContextMenu", s_->contextMenuNode_pending_);
 
     ImGui::End();
 }
@@ -57,12 +57,12 @@ void DirTreePanel::drawNode(FsNode* node) {
     }
 
     // Highlight the selected node
-    if (node == selectedNode_) {
+    if (node == s_->selectedNode_) {
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
     // Sync expanded state
-    if (expandedNodes_.count(node)) {
+    if (s_->expandedNodes_.count(node)) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     }
 
@@ -71,19 +71,19 @@ void DirTreePanel::drawNode(FsNode* node) {
 
     // Handle click selection
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-        selectedNode_ = node;
+        s_->selectedNode_ = node;
         MainWindow::instance().navigateTo(node);
     }
 
     // Right-click context menu
     if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-        contextMenuNode_ = node;
-        selectedNode_ = node;
+        s_->contextMenuNode_ = node;
+        s_->selectedNode_ = node;
     }
 
     // Track expansion state
     if (nodeOpen && hasChildren) {
-        expandedNodes_.insert(node);
+        s_->expandedNodes_.insert(node);
         for (auto& child : node->children) {
             if (child->isDir()) {
                 drawNode(child.get());
@@ -91,29 +91,47 @@ void DirTreePanel::drawNode(FsNode* node) {
         }
         ImGui::TreePop();
     } else if (!nodeOpen) {
-        expandedNodes_.erase(node);
+        s_->expandedNodes_.erase(node);
     }
 }
 
 bool DirTreePanel::isEntryExpanded(FsNode* node) const {
-    return expandedNodes_.count(node) > 0;
+    return s_->expandedNodes_.count(node) > 0;
 }
 
 void DirTreePanel::setEntryExpanded(FsNode* node, bool expanded) {
     if (expanded) {
-        expandedNodes_.insert(node);
+        s_->expandedNodes_.insert(node);
     } else {
-        expandedNodes_.erase(node);
+        s_->expandedNodes_.erase(node);
     }
 }
 
 void DirTreePanel::selectNode(FsNode* node) {
-    selectedNode_ = node;
+    s_->selectedNode_ = node;
 }
 
 void DirTreePanel::clearExpanded() {
-    expandedNodes_.clear();
-    selectedNode_ = nullptr;
+    s_->expandedNodes_.clear();
+    s_->selectedNode_ = nullptr;
+}
+
+std::vector<std::string> DirTreePanel::expandedPaths() const {
+    std::vector<std::string> paths;
+    paths.reserve(s_->expandedNodes_.size());
+    for (FsNode* n : s_->expandedNodes_) {
+        if (n) paths.push_back(n->absName());
+    }
+    return paths;
+}
+
+void DirTreePanel::restoreExpanded(const std::vector<std::string>& paths) {
+    s_->expandedNodes_.clear();
+    for (const std::string& p : paths) {
+        if (FsNode* n = FsTree::instance().nodeByPath(p)) {
+            s_->expandedNodes_.insert(n);
+        }
+    }
 }
 
 } // namespace fsvng

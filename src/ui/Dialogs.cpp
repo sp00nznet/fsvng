@@ -1,22 +1,132 @@
 #include "ui/Dialogs.h"
 
 #include <imgui.h>
+#include <cfloat>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 #include "core/FsNode.h"
+#include "core/FsTree.h"
 #include "core/Types.h"
+#include "core/FileOps.h"
 #include "ui/MainWindow.h"
 #include "ui/DirTreePanel.h"
+#include "ui/StatusBar.h"
 #include "geometry/CollapseExpand.h"
 #include "camera/Camera.h"
 #include "app/Config.h"
 
 namespace fsvng {
+
+// ============================================================================
+// openInSystem - launch the platform's default handler for a path
+// ============================================================================
+static void openInSystem(const std::string& path, bool isDir) {
+#ifdef _WIN32
+    ShellExecuteA(nullptr, isDir ? "explore" : "open", path.c_str(),
+                  nullptr, nullptr, SW_SHOWNORMAL);
+#else
+    // POSIX: hand off to the desktop opener. fork/exec (not system()) avoids
+    // shell-injection from paths with spaces or special characters. We
+    // double-fork so the launcher is reparented to init and reaped there,
+    // leaving no zombie behind for our process to wait on.
+    (void)isDir;
+#if defined(__APPLE__)
+    const char* opener = "open";
+#else
+    const char* opener = "xdg-open";
+#endif
+    pid_t pid = fork();
+    if (pid == 0) {
+        pid_t inner = fork();
+        if (inner == 0) {
+            execlp(opener, opener, path.c_str(), static_cast<char*>(nullptr));
+            _exit(127);
+        }
+        _exit(0);
+    } else if (pid > 0) {
+        waitpid(pid, nullptr, 0);
+    }
+#endif
+}
+
+// ============================================================================
+// revealInFileManager - show a path in its containing folder
+// ============================================================================
+static void revealInFileManager(const std::string& path) {
+#ifdef _WIN32
+    // /select highlights the item within its parent folder.
+    std::string args = "/select,\"" + path + "\"";
+    ShellExecuteA(nullptr, "open", "explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+#else
+    // Open the parent directory in the system file manager. (Selecting the
+    // exact item would require the org.freedesktop.FileManager1 D-Bus call,
+    // which not all managers serve; opening the container is universal.)
+    std::filesystem::path p(path);
+    std::filesystem::path parent = p.parent_path();
+    openInSystem(parent.empty() ? std::string(".") : parent.string(), true);
+#endif
+}
+
+// ============================================================================
+// openTerminalAt - launch a terminal emulator with cwd set to a directory
+// ============================================================================
+static void openTerminalAt(const std::string& dir) {
+#ifdef _WIN32
+    // "open" on a directory with cmd.exe, starting in that directory.
+    ShellExecuteA(nullptr, "open", "cmd.exe", nullptr, dir.c_str(), SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+    // macOS: Terminal.app opens at the given directory when handed a folder.
+    pid_t pid = fork();
+    if (pid == 0) {
+        pid_t inner = fork();
+        if (inner == 0) {
+            execlp("open", "open", "-a", "Terminal", dir.c_str(),
+                   static_cast<char*>(nullptr));
+            _exit(127);
+        }
+        _exit(0);
+    } else if (pid > 0) {
+        waitpid(pid, nullptr, 0);
+    }
+#else
+    // Linux: chdir into the target, then try terminals in preference order.
+    // Most inherit cwd; execlp returns only on failure, so we fall through.
+    pid_t pid = fork();
+    if (pid == 0) {
+        pid_t inner = fork();
+        if (inner == 0) {
+            if (chdir(dir.c_str()) != 0) {
+                _exit(127);
+            }
+            const char* envTerm = std::getenv("TERMINAL");
+            if (envTerm && envTerm[0] != '\0') {
+                execlp(envTerm, envTerm, static_cast<char*>(nullptr));
+            }
+            execlp("x-terminal-emulator", "x-terminal-emulator", static_cast<char*>(nullptr));
+            execlp("gnome-terminal", "gnome-terminal", static_cast<char*>(nullptr));
+            execlp("konsole", "konsole", static_cast<char*>(nullptr));
+            execlp("xfce4-terminal", "xfce4-terminal", static_cast<char*>(nullptr));
+            execlp("xterm", "xterm", static_cast<char*>(nullptr));
+            _exit(127);
+        }
+        _exit(0);
+    } else if (pid > 0) {
+        waitpid(pid, nullptr, 0);
+    }
+#endif
+}
 
 Dialogs& Dialogs::instance() {
     static Dialogs s;
@@ -55,6 +165,8 @@ void Dialogs::draw() {
     drawColorConfig();
     drawAbout();
     drawProperties();
+    drawRename();
+    drawNewFolder();
 }
 
 void Dialogs::drawChangeRoot() {
@@ -231,20 +343,59 @@ void Dialogs::drawContextMenuPopup(const char* popupId, FsNode* node) {
                 MainWindow::instance().navigateTo(node);
             }
 
-#ifdef _WIN32
             if (ImGui::MenuItem("Open")) {
-                std::string path = node->absName();
-                if (node->isDir()) {
-                    ShellExecuteA(nullptr, "explore", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-                } else {
-                    ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-                }
+                openInSystem(node->absName(), node->isDir());
             }
-#endif
+
+            if (ImGui::MenuItem("Reveal in File Manager")) {
+                revealInFileManager(node->absName());
+            }
+
+            if (ImGui::MenuItem("Open Terminal Here")) {
+                // For a file, open a terminal in its containing directory.
+                std::string dir = node->isDir()
+                    ? node->absName()
+                    : std::filesystem::path(node->absName()).parent_path().string();
+                openTerminalAt(dir.empty() ? std::string(".") : dir);
+            }
 
             if (ImGui::MenuItem("Copy Path")) {
                 std::string path = node->absName();
                 ImGui::SetClipboardText(path.c_str());
+            }
+
+            ImGui::Separator();
+
+            // ---- Mutating operations --------------------------------------
+            // The scanned root is excluded from rename/trash so the watched
+            // root path (and rescan target) stays valid.
+            bool isRoot = (node == FsTree::instance().rootDir());
+
+            if (node->isDir() && ImGui::MenuItem("New Folder...")) {
+                newFolderParent_ = node;
+                newFolderBuf_[0] = '\0';
+                opError_[0] = '\0';
+                showNewFolder_ = true;
+            }
+
+            if (ImGui::MenuItem("Rename...", nullptr, false, !isRoot)) {
+                renameNode_ = node;
+                std::snprintf(renameBuf_, sizeof(renameBuf_), "%s", node->name.c_str());
+                opError_[0] = '\0';
+                showRename_ = true;
+            }
+
+            bool canTrash = FileOps::trashAvailable() && !isRoot;
+            if (ImGui::MenuItem("Move to Trash", nullptr, false, canTrash)) {
+                FileOps::Result r = FileOps::moveToTrash(node->absName());
+                if (r.ok) {
+                    MainWindow::instance().rescanCurrentRoot();
+                } else {
+                    StatusBar::instance().setMessage("Trash failed: " + r.error, "");
+                }
+            }
+            if (!canTrash && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip("Install 'gio' (glib2) to enable Trash");
             }
 
             ImGui::Separator();
@@ -255,6 +406,80 @@ void Dialogs::drawContextMenuPopup(const char* popupId, FsNode* node) {
             }
         }
 
+        ImGui::EndPopup();
+    }
+}
+
+void Dialogs::drawRename() {
+    if (!showRename_) return;
+    ImGui::OpenPopup("Rename");
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Appearing);
+    if (ImGui::BeginPopupModal("Rename", &showRename_,
+                               ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::TextUnformatted("New name:");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        bool submit = ImGui::InputText("##renamebuf", renameBuf_, sizeof(renameBuf_),
+                                       ImGuiInputTextFlags_EnterReturnsTrue);
+        if (opError_[0] != '\0') {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", opError_);
+        }
+        if (ImGui::Button("Rename") || submit) {
+            FileOps::Result r{false, "no target"};
+            if (renameNode_) {
+                r = FileOps::rename(renameNode_->absName(), renameBuf_);
+            }
+            if (r.ok) {
+                showRename_ = false;
+                renameNode_ = nullptr;
+                MainWindow::instance().rescanCurrentRoot();
+                ImGui::CloseCurrentPopup();
+            } else {
+                std::snprintf(opError_, sizeof(opError_), "%s", r.error.c_str());
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            showRename_ = false;
+            renameNode_ = nullptr;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void Dialogs::drawNewFolder() {
+    if (!showNewFolder_) return;
+    ImGui::OpenPopup("New Folder");
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Appearing);
+    if (ImGui::BeginPopupModal("New Folder", &showNewFolder_,
+                               ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::TextUnformatted("Folder name:");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        bool submit = ImGui::InputText("##newfolderbuf", newFolderBuf_, sizeof(newFolderBuf_),
+                                       ImGuiInputTextFlags_EnterReturnsTrue);
+        if (opError_[0] != '\0') {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", opError_);
+        }
+        if (ImGui::Button("Create") || submit) {
+            FileOps::Result r{false, "no target"};
+            if (newFolderParent_) {
+                r = FileOps::createFolder(newFolderParent_->absName(), newFolderBuf_);
+            }
+            if (r.ok) {
+                showNewFolder_ = false;
+                newFolderParent_ = nullptr;
+                MainWindow::instance().rescanCurrentRoot();
+                ImGui::CloseCurrentPopup();
+            } else {
+                std::snprintf(opError_, sizeof(opError_), "%s", r.error.c_str());
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            showNewFolder_ = false;
+            newFolderParent_ = nullptr;
+            ImGui::CloseCurrentPopup();
+        }
         ImGui::EndPopup();
     }
 }

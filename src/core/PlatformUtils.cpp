@@ -19,6 +19,10 @@
 #include <pwd.h>
 #include <grp.h>
 #include <unistd.h>
+#include <limits.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #endif
 
 namespace fsvng {
@@ -312,6 +316,52 @@ std::string formatTime(time_t t) {
     char buf[64];
     std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmBuf);
     return std::string(buf);
+}
+
+// ============================================================================
+// getExecutableDir - directory of the running executable (no trailing sep)
+// ============================================================================
+std::string getExecutableDir() {
+#ifdef _WIN32
+    wchar_t wpath[MAX_PATH];
+    DWORD len = GetModuleFileNameW(nullptr, wpath, MAX_PATH);
+    if (len == 0 || len == MAX_PATH) {
+        return ".";
+    }
+    // Narrow the wide path to UTF-8.
+    int bytes = WideCharToMultiByte(CP_UTF8, 0, wpath, static_cast<int>(len),
+                                    nullptr, 0, nullptr, nullptr);
+    std::string path(static_cast<size_t>(bytes), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wpath, static_cast<int>(len),
+                        &path[0], bytes, nullptr, nullptr);
+    const char sep = '\\';
+#else
+    std::string path;
+#ifdef __APPLE__
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size); // Query required buffer size.
+    path.resize(size);
+    if (_NSGetExecutablePath(&path[0], &size) != 0) {
+        return ".";
+    }
+    path.resize(std::strlen(path.c_str())); // Trim to the embedded NUL.
+#else
+    // Linux: resolve the /proc/self/exe symlink.
+    char buf[PATH_MAX];
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0) {
+        return ".";
+    }
+    path.assign(buf, static_cast<size_t>(n));
+#endif
+    const char sep = '/';
+#endif
+
+    std::string::size_type slash = path.find_last_of(sep);
+    if (slash == std::string::npos) {
+        return ".";
+    }
+    return path.substr(0, slash);
 }
 
 } // namespace PlatformUtils

@@ -8,6 +8,7 @@
 
 #include "ui/ImGuiBackend.h"
 #include "ui/MainWindow.h"
+#include "scene/SceneManager.h"
 #include "core/FsTree.h"
 #include "core/FsScanner.h"
 #include "animation/Animation.h"
@@ -110,6 +111,10 @@ bool App::init(int argc, char* argv[]) {
             initialPath_ = ".";
         }
     }
+    // Create the first scene and point all per-scene singletons at it before
+    // any scan/draw happens.
+    SceneManager::instance().init();
+
     MainWindow::instance().setInitialPath(initialPath_);
 
     running_ = true;
@@ -134,6 +139,9 @@ void App::run() {
 void App::shutdown() {
     Config::instance().themeName = ThemeManager::instance().currentTheme().id;
     Config::instance().save();
+    // Tear down scenes (joins scan/watch threads, frees GL textures) while the
+    // GL context is still alive.
+    SceneManager::instance().shutdown();
     Renderer::instance().shutdown();
     ImGuiBackend::shutdown();
 
