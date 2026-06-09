@@ -19,9 +19,12 @@
 
 namespace fsvng {
 
-ViewportPanel& ViewportPanel::instance() {
-    static ViewportPanel s;
-    return s;
+ViewportPanel::~ViewportPanel() {
+    if (fbo_ != 0) {
+        glDeleteFramebuffers(1, &fbo_);
+        glDeleteTextures(1, &colorTex_);
+        glDeleteRenderbuffers(1, &depthRbo_);
+    }
 }
 
 void ViewportPanel::createFBO(int width, int height) {
@@ -483,9 +486,12 @@ void ViewportPanel::drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& vie
 // Main draw
 // ============================================================================
 
-void ViewportPanel::draw() {
+bool ViewportPanel::drawPane(const char* id, const ImVec2& size, bool focused) {
+    popupId_ = std::string("##vpctx_") + id;
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("Viewport");
+    ImGui::BeginChild(id, size, ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
 
     // Get available content region size
@@ -583,20 +589,29 @@ void ViewportPanel::draw() {
         }
     }
 
-    // Handle mouse input for camera control and clicking
+    // Request focus when this pane is clicked.
+    bool clicked = ImGui::IsWindowHovered() &&
+                   (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+                    ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
+                    ImGui::IsMouseClicked(ImGuiMouseButton_Middle));
+
+    // Handle mouse input for camera control and clicking (any hovered pane).
     handleInput();
 
-    // Handle keyboard navigation
-    handleKeyboard();
+    // Keyboard navigation only drives the focused pane.
+    if (focused) {
+        handleKeyboard();
+    }
 
-    // Context menu popup (must be within the Viewport window's Begin/End)
+    // Per-pane context menu popup.
     if (openContextMenu_) {
-        ImGui::OpenPopup("##ViewportContextMenu");
+        ImGui::OpenPopup(popupId_.c_str());
         openContextMenu_ = false;
     }
-    Dialogs::instance().drawContextMenuPopup("##ViewportContextMenu", contextMenuNode_);
+    Dialogs::instance().drawContextMenuPopup(popupId_.c_str(), contextMenuNode_);
 
-    ImGui::End();
+    ImGui::EndChild();
+    return clicked;
 }
 
 } // namespace fsvng

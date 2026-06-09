@@ -10,6 +10,7 @@
 #include "core/FsNode.h"
 #include "ui/MainWindow.h"
 #include "camera/Camera.h"
+#include "scene/SceneManager.h"
 
 namespace fsvng {
 
@@ -53,6 +54,23 @@ void Toolbar::draw() {
             Camera& cam = Camera::instance();
             cam.birdseyeView(!cam.isBirdseyeActive());
         }
+
+        // Multi-pane controls.
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        int paneCount = SceneManager::instance().sceneCount();
+        ImGui::BeginDisabled(paneCount >= SceneManager::kMaxScenes);
+        if (ImGui::Button("+ Pane")) {
+            mw.newPane();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(paneCount <= 1);
+        if (ImGui::Button("- Pane")) {
+            mw.closeFocusedPane();
+        }
+        ImGui::EndDisabled();
 
         ImGui::SameLine();
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);

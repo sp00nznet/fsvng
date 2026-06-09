@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <stdexcept>
 #include <iostream>
 
@@ -28,6 +29,8 @@
 #include "geometry/CollapseExpand.h"
 #include "camera/Camera.h"
 #include "ui/PulseEffect.h"
+#include "scene/Scene.h"
+#include "scene/SceneManager.h"
 
 namespace fsvng {
 
@@ -474,7 +477,7 @@ void MainWindow::drawProgressOverlay() {
     ImGui::PopStyleVar(2);
 }
 
-void MainWindow::draw() {
+void MainWindow::serviceScene() {
     // Check if background scan just completed
     if (s_->scanDone_.load()) {
         finishScan();
@@ -511,13 +514,27 @@ void MainWindow::draw() {
         s_->activeScanner_->showHidden = s_->showHidden_;
         s_->scanThread_ = std::thread(&MainWindow::scanThreadFunc, this, path);
     }
+}
 
-    // Do initial scan on first frame
-    if (firstFrame_) {
-        if (!initialPath_.empty() && !s_->scanning_.load()) {
+void MainWindow::draw() {
+    SceneManager& sm = SceneManager::instance();
+    Scene* focused = sm.focused();
+
+    // Initial scan on first frame (focused/first pane).
+    if (firstFrame_ && !initialPath_.empty()) {
+        sm.activate(focused);
+        if (!s_->scanning_.load()) {
             requestScan(initialPath_);
         }
     }
+
+    // Service every pane's background work (scan completion, deferred scans,
+    // live-watch), then return to the focused pane for the UI below.
+    for (int i = 0; i < sm.sceneCount(); ++i) {
+        sm.activate(sm.sceneAt(i));
+        serviceScene();
+    }
+    sm.activate(focused);
 
     // Create a fullscreen dockspace
     ImGuiWindowFlags windowFlags =
@@ -564,13 +581,72 @@ void MainWindow::draw() {
     DirTreePanel::instance().draw();
     FileListPanel::instance().draw();
     PreviewPanel::instance().draw();
-    ViewportPanel::instance().draw();
+    drawViewportGrid();
     StatusBar::instance().draw();
     Dialogs::instance().draw();
 
     if (s_->scanning_.load()) {
         drawProgressOverlay();
     }
+}
+
+void MainWindow::drawViewportGrid() {
+    SceneManager& sm = SceneManager::instance();
+    Scene* focused = sm.focused();
+    int n = sm.sceneCount();
+    if (n < 1) return;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("Viewport");
+
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    int cols = (n <= 1) ? 1 : 2;
+    int rows = (n <= 2) ? 1 : 2;
+    float cw = avail.x / cols;
+    float ch = avail.y / rows;
+
+    Scene* newFocus = focused;
+    for (int i = 0; i < n; ++i) {
+        Scene* sc = sm.sceneAt(i);
+        int col = i % cols;
+        if (col > 0) ImGui::SameLine();
+
+        sm.activate(sc);
+        char id[32];
+        std::snprintf(id, sizeof(id), "pane%d", i);
+        bool clicked = sc->viewport.drawPane(id, ImVec2(cw, ch), sc == focused);
+        if (clicked) newFocus = sc;
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+
+    if (newFocus != focused) {
+        // Settle the outgoing pane's camera so its in-flight morphs don't run
+        // under the newly-focused pane during the next Animation::tick.
+        sm.activate(focused);
+        Camera::instance().panFinish();
+        sm.setFocused(newFocus);
+    }
+    sm.activate(newFocus);
+}
+
+void MainWindow::newPane() {
+    SceneManager& sm = SceneManager::instance();
+    std::string root = s_->currentRootPath_;  // focused pane's current root
+    Scene* sc = sm.addScene();
+    if (!sc) return;  // at capacity
+    sm.setFocused(sc);
+    sm.activate(sc);
+    if (!root.empty()) {
+        requestScan(root);
+    }
+}
+
+void MainWindow::closeFocusedPane() {
+    SceneManager& sm = SceneManager::instance();
+    if (sm.sceneCount() <= 1) return;  // keep at least one pane
+    sm.closeFocused();
 }
 
 void MainWindow::setupDockspace() {

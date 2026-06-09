@@ -6,6 +6,8 @@
 #include "ui/DirTreePanel.h"
 #include "ui/FileListPanel.h"
 #include "ui/PreviewPanel.h"
+#include "ui/PulseEffect.h"
+#include "ui/ViewportPanel.h"
 #include "ui/MainWindow.h"
 
 namespace fsvng {
@@ -26,7 +28,11 @@ struct Scene {
     DirTreePanel::SceneState    dirTree;
     FileListPanel::SceneState   fileList;
     PreviewPanel::SceneState    preview;
+    PulseEffect::SceneState     pulse;
     MainWindow::SceneState      main;
+
+    // Each pane owns its viewport (FBO + hit-test + input state).
+    ViewportPanel viewport;
 
     // Root path this pane was opened on (for labels / re-scan).
     std::string rootPath;

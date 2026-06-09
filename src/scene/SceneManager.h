@@ -40,6 +40,10 @@ public:
     // Create a new scene (up to kMaxScenes). Returns nullptr if at capacity.
     Scene* addScene();
 
+    // Close the focused scene (no-op if only one remains). Activates a
+    // surviving scene before freeing, so no singleton dangles.
+    void closeFocused();
+
     // Stop threads/watchers and free GL resources while the GL context is
     // still alive, then drop all scenes. Call from App::shutdown().
     void shutdown();

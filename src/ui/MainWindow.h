@@ -71,6 +71,10 @@ public:
     bool hasPendingChanges() const { return s_->fsChangePending_; }
     void rescanCurrentRoot();
 
+    // Multi-pane: open a new pane (on the focused pane's root) / close focused.
+    void newPane();
+    void closeFocusedPane();
+
     // Per-scene application state. Owned by a Scene so each pane has its own
     // navigation, scan thread, watcher, search and view mode. Non-copyable
     // (holds a thread/mutex/watcher) — only ever referenced via pointer.
@@ -139,6 +143,12 @@ private:
 
     void applySearch(FsNode* node, const std::string& lowerQuery, bool hasWildcard);
     void pollWatcher();
+
+    // Background housekeeping for the active scene (scan completion, deferred
+    // scans, watcher polling). Called once per scene per frame.
+    void serviceScene();
+    // Draw all panes' viewports in a grid; manages focus.
+    void drawViewportGrid();
 
     // Window-level (not per-scene) state.
     bool firstFrame_ = true;

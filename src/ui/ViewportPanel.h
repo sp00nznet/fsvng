@@ -4,6 +4,8 @@
 #include <glm/glm.hpp>
 #include <imgui.h>
 
+#include <string>
+
 #include "renderer/ShaderProgram.h"
 
 namespace fsvng {
@@ -12,15 +14,22 @@ class FsNode;
 
 class ViewportPanel {
 public:
-    static ViewportPanel& instance();
+    ViewportPanel() = default;
+    ~ViewportPanel();
 
-    void draw();
+    ViewportPanel(const ViewportPanel&) = delete;
+    ViewportPanel& operator=(const ViewportPanel&) = delete;
+
+    // Draw this pane into a child region of size `size` with the given unique
+    // ImGui id. The currently-active scene supplies the tree/camera. `focused`
+    // gates keyboard input. Returns true if the pane was clicked (caller
+    // should make it the focused pane).
+    bool drawPane(const char* id, const ImVec2& size, bool focused);
 
     int getWidth() const { return width_; }
     int getHeight() const { return height_; }
 
 private:
-    ViewportPanel() = default;
     void createFBO(int width, int height);
     void handleInput();
     void handleKeyboard();
@@ -56,6 +65,7 @@ private:
     float rightClickDragDist_ = 0.0f;
     bool openContextMenu_ = false;
     FsNode* contextMenuNode_ = nullptr;
+    std::string popupId_ = "##ViewportContextMenu";  // unique per pane
 
     // Cached rendering state for hit testing
     glm::mat4 cachedViewProj_{1.0f};

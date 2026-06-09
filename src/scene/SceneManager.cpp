@@ -61,6 +61,7 @@ void SceneManager::activate(Scene* sc) {
     DirTreePanel::instance().setSceneState(&sc->dirTree);
     FileListPanel::instance().setSceneState(&sc->fileList);
     PreviewPanel::instance().setSceneState(&sc->preview);
+    PulseEffect::instance().setSceneState(&sc->pulse);
     MainWindow::instance().setSceneState(&sc->main);
     active_ = sc;
 }
@@ -72,6 +73,24 @@ int SceneManager::indexOf(Scene* sc) const {
     return -1;
 }
 
+void SceneManager::closeFocused() {
+    if (scenes_.size() <= 1) return;
+    int idx = indexOf(focused_);
+    if (idx < 0) idx = 0;
+
+    // Pick a survivor and activate it BEFORE freeing the closed scene, so no
+    // singleton points at memory we're about to release.
+    int survivorIdx = (idx > 0) ? idx - 1 : 1;
+    Scene* survivor = scenes_[survivorIdx].get();
+    activate(survivor);
+    focused_ = survivor;
+
+    // Erase the closed scene (Scene::~Scene joins its scan/watch threads and
+    // frees its GL texture while the context is alive). survivor's pointer
+    // stays valid (unique_ptr move within the vector doesn't move the object).
+    scenes_.erase(scenes_.begin() + idx);
+}
+
 void SceneManager::resetSingletonsToDefault() {
     Camera::instance().setSceneState(nullptr);
     FsTree::instance().setSceneState(nullptr);
@@ -79,6 +98,7 @@ void SceneManager::resetSingletonsToDefault() {
     DirTreePanel::instance().setSceneState(nullptr);
     FileListPanel::instance().setSceneState(nullptr);
     PreviewPanel::instance().setSceneState(nullptr);
+    PulseEffect::instance().setSceneState(nullptr);
     MainWindow::instance().setSceneState(nullptr);
 }
 
