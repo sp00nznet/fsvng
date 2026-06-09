@@ -172,6 +172,25 @@ void FileListPanel::draw() {
                 s_->selectedNode_ = child;
             }
 
+            // Drag source: carry the entry's absolute path (pointers don't
+            // survive the rescan a move triggers).
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                std::string p = child->absName();
+                ImGui::SetDragDropPayload("FSVNG_NODE", p.c_str(), p.size());
+                ImGui::Text("Move %s", child->name.c_str());
+                ImGui::EndDragDropSource();
+            }
+            // Drop target: dropping onto a directory row moves into it.
+            if (child->isDir() && ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* pl =
+                        ImGui::AcceptDragDropPayload("FSVNG_NODE")) {
+                    std::string src(static_cast<const char*>(pl->Data),
+                                    static_cast<size_t>(pl->DataSize));
+                    MainWindow::instance().moveAcrossPanes(src, child->absName());
+                }
+                ImGui::EndDragDropTarget();
+            }
+
             // Size column
             ImGui::TableSetColumnIndex(2);
             ImGui::Text("%s", formatSize(effectiveSize(child)).c_str());

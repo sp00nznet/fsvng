@@ -577,6 +577,25 @@ bool ViewportPanel::drawPane(const char* id, const ImVec2& size, bool focused) {
         // Flip UV vertically because OpenGL textures are bottom-up
         ImGui::Image(texId, availSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
+        // Drop target: dropping a file/dir onto this pane moves it into the
+        // pane's current directory (the active scene's current node, else its
+        // root). Works for drags originating in any pane.
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* pl =
+                    ImGui::AcceptDragDropPayload("FSVNG_NODE")) {
+                FsNode* cur = MainWindow::instance().getCurrentNode();
+                FsNode* destDir = (cur && cur->isDir())
+                                      ? cur
+                                      : FsTree::instance().rootDir();
+                if (destDir) {
+                    std::string src(static_cast<const char*>(pl->Data),
+                                    static_cast<size_t>(pl->DataSize));
+                    MainWindow::instance().moveAcrossPanes(src, destDir->absName());
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+
         // Draw text labels overlay
         if (hasScene_) {
             FsvMode mode = MainWindow::instance().getMode();

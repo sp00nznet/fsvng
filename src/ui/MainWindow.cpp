@@ -22,6 +22,7 @@
 #include "core/FsTree.h"
 #include "core/FsNode.h"
 #include "core/FsScanner.h"
+#include "core/FileOps.h"
 #include "core/PlatformUtils.h"
 #include "color/ColorSystem.h"
 #include "renderer/Renderer.h"
@@ -520,6 +521,16 @@ void MainWindow::draw() {
     SceneManager& sm = SceneManager::instance();
     Scene* focused = sm.focused();
 
+    // A cross-pane move asked every pane to refresh; do it before servicing.
+    if (rescanAllPending_) {
+        rescanAllPending_ = false;
+        for (int i = 0; i < sm.sceneCount(); ++i) {
+            sm.activate(sm.sceneAt(i));
+            rescanCurrentRoot();
+        }
+        sm.activate(focused);
+    }
+
     // Initial scan on first frame (focused/first pane).
     if (firstFrame_ && !initialPath_.empty()) {
         sm.activate(focused);
@@ -647,6 +658,20 @@ void MainWindow::closeFocusedPane() {
     SceneManager& sm = SceneManager::instance();
     if (sm.sceneCount() <= 1) return;  // keep at least one pane
     sm.closeFocused();
+}
+
+void MainWindow::moveAcrossPanes(const std::string& srcPath,
+                                 const std::string& destDirPath) {
+    FileOps::Result r = FileOps::moveInto(srcPath, destDirPath);
+    if (r.ok) {
+        // Refresh every pane (source loses the entry, dest gains it). Deferred
+        // to the next frame so we don't re-scan mid-render. Each pane restores
+        // its own view by path.
+        rescanAllPending_ = true;
+        StatusBar::instance().setMessage("Moved to " + destDirPath, "");
+    } else {
+        StatusBar::instance().setMessage("Move failed: " + r.error, "");
+    }
 }
 
 void MainWindow::setupDockspace() {

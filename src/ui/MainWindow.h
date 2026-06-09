@@ -75,6 +75,10 @@ public:
     void newPane();
     void closeFocusedPane();
 
+    // Move a path (from any pane) into destDirPath, then refresh all panes.
+    // Used by cross-pane drag-and-drop.
+    void moveAcrossPanes(const std::string& srcPath, const std::string& destDirPath);
+
     // Per-scene application state. Owned by a Scene so each pane has its own
     // navigation, scan thread, watcher, search and view mode. Non-copyable
     // (holds a thread/mutex/watcher) — only ever referenced via pointer.
@@ -153,6 +157,7 @@ private:
     // Window-level (not per-scene) state.
     bool firstFrame_ = true;
     bool dockspaceInitialized_ = false;
+    bool rescanAllPending_ = false;  // cross-pane move requested a full refresh
     std::string initialPath_;
 
     SceneState defaultState_;
