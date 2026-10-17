@@ -15,7 +15,9 @@ void ImGuiBackend::init(SDL_Window* window, SDL_GLContext glContext) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+#ifndef __EMSCRIPTEN__
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // a page has one canvas
+#endif
 
     ImGui::StyleColorsDark();
 
@@ -28,7 +30,11 @@ void ImGuiBackend::init(SDL_Window* window, SDL_GLContext glContext) {
     }
 
     ImGui_ImplSDL2_InitForOpenGL(window, glContext);
+#ifdef __EMSCRIPTEN__
+    ImGui_ImplOpenGL3_Init("#version 300 es");
+#else
     ImGui_ImplOpenGL3_Init("#version 330");
+#endif
 }
 
 void ImGuiBackend::shutdown() {

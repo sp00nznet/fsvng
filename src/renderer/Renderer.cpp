@@ -26,8 +26,10 @@ void Renderer::init() {
     // Set clear color to dark gray
     glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
 
-    // Enable MSAA if available
+    // Enable MSAA if available (WebGL multisamples the canvas on its own)
+#ifndef __EMSCRIPTEN__
     glEnable(GL_MULTISAMPLE);
+#endif
 
     // Enable back-face culling
     glEnable(GL_CULL_FACE);

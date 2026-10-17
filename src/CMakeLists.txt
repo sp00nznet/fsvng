@@ -68,6 +68,18 @@ else()
     target_link_libraries(fsvng PRIVATE OpenGL::GL)
 endif()
 
+if(EMSCRIPTEN)
+    # The browser build: WebGL 2, the shaders, and a sample tree to look at (a browser can't scan
+    # your disk). FSVNG_WEB_SAMPLE is the folder shown, mounted at /fsvng.
+    set(FSVNG_WEB_SAMPLE "${CMAKE_SOURCE_DIR}/src" CACHE PATH "Folder bundled into the web build")
+    target_link_options(fsvng PRIVATE
+        -sUSE_WEBGL2=1 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3=1
+        -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1MB
+        "--preload-file=${CMAKE_SOURCE_DIR}/shaders@/shaders"
+        "--preload-file=${FSVNG_WEB_SAMPLE}@/fsvng")
+    return()
+endif()
+
 # Copy shaders to build directory
 add_custom_command(TARGET fsvng POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

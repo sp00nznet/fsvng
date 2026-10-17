@@ -56,7 +56,27 @@ bool ShaderProgram::loadFromFiles(const std::string& vertPath, const std::string
     return loadFromSource(vertSrc, fragSrc);
 }
 
-bool ShaderProgram::loadFromSource(const std::string& vertSrc, const std::string& fragSrc) {
+#ifdef __EMSCRIPTEN__
+// The shaders are GLSL 3.30 core; WebGL 2 speaks GLSL ES 3.00, which needs its own version line
+// and a default precision.
+static std::string toEs(const std::string& src) {
+    const std::string desktop = "#version 330 core";
+    std::string out = src;
+    const auto at = out.find(desktop);
+    if (at != std::string::npos) {
+        out.replace(at, desktop.size(), "#version 300 es\nprecision highp float;\nprecision highp int;");
+    }
+    return out;
+}
+#endif
+
+bool ShaderProgram::loadFromSource(const std::string& vertSrcIn, const std::string& fragSrcIn) {
+#ifdef __EMSCRIPTEN__
+    const std::string vertSrc = toEs(vertSrcIn), fragSrc = toEs(fragSrcIn);
+#else
+    const std::string& vertSrc = vertSrcIn;
+    const std::string& fragSrc = fragSrcIn;
+#endif
     // Clean up any previously loaded program
     if (program_ != 0) {
         glDeleteProgram(program_);

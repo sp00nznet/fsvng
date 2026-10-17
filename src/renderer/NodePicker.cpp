@@ -143,8 +143,9 @@ int NodePicker::pick(int x, int y) {
     // Flip y coordinate (OpenGL origin is bottom-left)
     int glY = height_ - y - 1;
 
-    unsigned char pixel[3] = {0, 0, 0};
-    glReadPixels(x, glY, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, pixel);
+    // RGBA: the one format WebGL 2 always reads back; the desktop is happy with it too.
+    unsigned char pixel[4] = {0, 0, 0, 0};
+    glReadPixels(x, glY, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
 
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 

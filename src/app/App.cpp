@@ -16,6 +16,10 @@
 #include "app/Config.h"
 #include "ui/ThemeManager.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 namespace fsvng {
 
 App* App::instance_ = nullptr;
@@ -44,11 +48,18 @@ bool App::init(int argc, char* argv[]) {
         return false;
     }
 
+#ifdef __EMSCRIPTEN__
+    // The browser: WebGL 2, which is OpenGL ES 3.0
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#else
     // Request OpenGL 3.3 Core
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+#endif
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
@@ -102,6 +113,9 @@ bool App::init(int argc, char* argv[]) {
     Animation::instance().init();
 
     // Set initial scan path: CLI arg > default path > current dir
+#ifdef __EMSCRIPTEN__
+    if (initialPath_.empty()) initialPath_ = "/fsvng";   // the folder bundled into the page
+#endif
     if (initialPath_.empty()) {
         const std::string& dp = Config::instance().defaultPath;
         if (!dp.empty()) {
@@ -116,19 +130,28 @@ bool App::init(int argc, char* argv[]) {
     return true;
 }
 
+void App::frame() {
+    processEvents();
+    beginFrame();
+
+    // Update animation
+    Animation::instance().tick();
+
+    // Draw the main UI
+    MainWindow::instance().draw();
+
+    endFrame();
+}
+
 void App::run() {
+#ifdef __EMSCRIPTEN__
+    // The browser owns the loop: one frame per animation frame, and run() never returns.
+    emscripten_set_main_loop_arg([](void* app) { static_cast<App*>(app)->frame(); }, this, 0, true);
+#else
     while (running_) {
-        processEvents();
-        beginFrame();
-
-        // Update animation
-        Animation::instance().tick();
-
-        // Draw the main UI
-        MainWindow::instance().draw();
-
-        endFrame();
+        frame();
     }
+#endif
 }
 
 void App::shutdown() {

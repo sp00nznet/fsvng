@@ -380,7 +380,11 @@ void MainWindow::draw() {
             scanThread_.join();
         }
         activeScanner_ = std::make_shared<FsScanner>();
+#ifdef __EMSCRIPTEN__
+        scanThreadFunc(path);   // no threads in the page; the bundled tree scans in a moment
+#else
         scanThread_ = std::thread(&MainWindow::scanThreadFunc, this, path);
+#endif
     }
 
     // Do initial scan on first frame

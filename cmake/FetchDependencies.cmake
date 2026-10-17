@@ -1,5 +1,7 @@
 include(FetchContent)
 
+# In the browser, Emscripten supplies SDL2 and OpenGL ES 3 (WebGL 2): see cmake/Web.cmake.
+if(NOT EMSCRIPTEN)
 # SDL2
 FetchContent_Declare(
     SDL2
@@ -11,6 +13,7 @@ set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST OFF CACHE BOOL "" FORCE)
 set(SDL2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+endif()
 
 # GLM
 FetchContent_Declare(
@@ -21,12 +24,14 @@ FetchContent_Declare(
 )
 
 # glad (OpenGL 3.3 Core loader)
+if(NOT EMSCRIPTEN)
 FetchContent_Declare(
     glad
     GIT_REPOSITORY https://github.com/Dav1dde/glad.git
     GIT_TAG        v2.0.8
     GIT_SHALLOW    TRUE
 )
+endif()
 
 # Dear ImGui (docking branch)
 FetchContent_Declare(
@@ -45,7 +50,12 @@ FetchContent_Declare(
 )
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(SDL2 glm glad imgui json)
+if(EMSCRIPTEN)
+    FetchContent_MakeAvailable(glm imgui json)
+    include(${CMAKE_CURRENT_LIST_DIR}/Web.cmake)
+else()
+    FetchContent_MakeAvailable(SDL2 glm glad imgui json)
+endif()
 
 # Build glad as a library
 if(NOT TARGET glad_gl_core_33)

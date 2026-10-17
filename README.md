@@ -69,6 +69,21 @@ cmake --build build --config Release
 
 ---
 
+## In the browser
+
+fsvng also builds with Emscripten, to WebGL 2. Try it at [sp00.nz/#fsvng](https://sp00.nz/#fsvng).
+
+```bash
+emcmake cmake -S . -B ../fsvng-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DFSVNG_WEB_SAMPLE=/path/to/a/folder
+cmake --build ../fsvng-web    # -> src/fsvng.js, fsvng.wasm, fsvng.data
+```
+
+A page can't read your disk, so the build bundles one folder (`FSVNG_WEB_SAMPLE`, default `src/`)
+and opens it at `/fsvng`. Keep the build directory outside that folder. The differences from the
+desktop are all behind `__EMSCRIPTEN__` and `cmake/Web.cmake`: Emscripten's SDL2 port, GLES 3
+instead of glad, shaders rewritten to GLSL ES 3.00 as they load, the browser driving the main loop,
+and the scan running on the main thread (pages have no threads here).
+
 ## Controls
 
 | Input | Action |

@@ -23,6 +23,7 @@ public:
     static App& instance();
 
 private:
+    void frame();
     void processEvents();
     void beginFrame();
     void endFrame();
