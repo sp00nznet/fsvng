@@ -57,8 +57,17 @@ jobs:
         run: |
           pkg="fsvng-${GITHUB_REF_NAME}-${{ matrix.name }}"
           mkdir -p "$pkg"
-          if [ "$RUNNER_OS" = Windows ]; then bin=build/src/Release; else bin=build/src; fi
-          cp -r "$bin"/fsvng* "$bin/shaders" COPYING README.md "$pkg/"
+          if [ "$RUNNER_OS" = Windows ]; then exe=build/src/Release/fsvng.exe; else exe=build/src/fsvng; fi
+          cp -r "$exe" "$(dirname "$exe")/shaders" LICENSE NOTICE README.md "$pkg/"
+          # The binary links these statically; ship each one's licence verbatim from its source
+          mkdir -p "$pkg/LICENSES"
+          cp LICENSES/*.txt "$pkg/LICENSES/"
+          d=build/_deps
+          cp $d/sdl2-src/LICENSE.txt  "$pkg/LICENSES/SDL2.txt"
+          cp $d/imgui-src/LICENSE.txt "$pkg/LICENSES/imgui.txt"
+          cp $d/glm-src/copying.txt   "$pkg/LICENSES/glm.txt"
+          cp $d/glad-src/LICENSE      "$pkg/LICENSES/glad.txt"
+          cp $d/json-src/LICENSE.MIT  "$pkg/LICENSES/nlohmann-json.txt"
           if [ "$RUNNER_OS" = Windows ]; then
             7z a "$pkg.zip" "$pkg" >/dev/null
           else
@@ -88,6 +97,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ver="${GITHUB_REF_NAME#v}"
+          grep -q "project(fsvng VERSION $ver " CMakeLists.txt || { echo "Tag $GITHUB_REF_NAME doesn't match the version in CMakeLists.txt"; exit 1; }
           awk -v v="$ver" '/^## \[/{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md > notes.md
           test -s notes.md || { echo "No CHANGELOG.md section for $ver"; exit 1; }
           gh release create "$GITHUB_REF_NAME" dist/* --title "fsvng $GITHUB_REF_NAME" --notes-file notes.md

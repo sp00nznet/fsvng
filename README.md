@@ -1,165 +1,143 @@
 # fsvng
 
-### Your filesystem, but make it *three-dimensional*
+[![CI](https://github.com/sp00nznet/fsvng/actions/workflows/ci.yml/badge.svg)](https://github.com/sp00nznet/fsvng/actions/workflows/ci.yml)
 
-**fsvng** is a from-scratch C++17 rewrite of [fsv](http://fsv.sourceforge.net/), the legendary 1999 3D file system visualizer. It turns your directory listings into navigable 3D landscapes.
-
-![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square)
-![OpenGL](https://img.shields.io/badge/OpenGL-3.3%20Core-green?style=flat-square)
-![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20Mac%20%7C%20Linux-lightgrey?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen?style=flat-square)
+fsvng shows a folder as a 3D landscape you can fly through: every file is a block sized by how
+big it is, every folder a platform holding its contents. It is a C++17 rewrite of
+[fsv](http://fsv.sourceforge.net/), the 1999 3D File System Visualizer, for Windows, macOS and
+Linux.
 
 <p align="center">
-  <img src="gfx/animated.gif" alt="fsvng in action" width="800">
+  <img src="gfx/fsvng.gif" alt="TreeV: the tree grows outward, then the camera swoops down to the root" width="720">
 </p>
 
----
+## Status
 
-## What does it do?
+**v0.10.0, alpha.** Windows is where fsvng is used day to day. The Linux and macOS builds compile
+and pass the test suite in CI on every push, but haven't been run by hand yet; reports welcome.
+Two of fsv's views are here: **MapV** (nested treemap) and **TreeV** (radial tree). fsv's third,
+DiscV, was ported and then removed. See [ROADMAP.md](ROADMAP.md) for what's next.
 
-Point fsvng at any directory and watch it build a 3D visualization of your filesystem. Navigate through your files the way nature intended: by flying a camera through a city of colored blocks.
+## Screenshots
 
 <p align="center">
-  <img src="gfx/mapview.png" alt="MapV overview" width="800"><br>
-  <em>MapV — nested treemap showing directory structure as 3D boxes</em>
+  <img src="gfx/mapv.png" alt="MapV view of six open-source projects" width="800"><br>
+  <em>MapV: each folder is a raised platform and each file a block on it, sized by bytes.
+  The sources of SDL2, Dear ImGui, GLM, nlohmann/json, glad and GoogleTest, fully expanded.</em>
 </p>
 
 <p align="center">
-  <img src="gfx/mapview-exe.png" alt="MapV zoomed in" width="800"><br>
-  <em>Zoomed in — double-click to navigate into directories and inspect individual files</em>
+  <img src="gfx/treev.png" alt="TreeV view of the same folders" width="800"><br>
+  <em>TreeV, Synthwave theme: the same tree as rings, each folder's contents one ring further out.</em>
 </p>
 
-**Three visualization modes:**
+## Getting Started
 
-| Mode | What it looks like | Best for |
-|------|-------------------|----------|
-| **MapV** | Nested treemap of 3D boxes | Seeing where your disk space went |
-| **TreeV** | Radial platforms spiraling upward | Understanding directory hierarchy |
-| **DiscV** | Circular discs branching outward | Visualizing file distribution |
+### Quick start: download and run
 
-**Color modes:** By file type, by modification timestamp, or by wildcard pattern matching.
+1. Open [Releases](https://github.com/sp00nznet/fsvng/releases/latest) and download the archive
+   for your system: `fsvng-v0.10.0-windows-x64.zip`, `fsvng-v0.10.0-linux-x64.tar.gz` or
+   `fsvng-v0.10.0-macos-arm64.tar.gz` (Apple Silicon).
+2. Unpack it anywhere. Keep `fsvng` and the `shaders` folder side by side.
+3. Run it:
+   - **Windows:** drag a folder onto `fsvng.exe`. (Double-clicking it shows the folder it sits in;
+     pick another with File > Change Root.) The binary isn't signed, so SmartScreen may ask:
+     More info > Run anyway.
+   - **Linux:** `./fsvng ~/Documents`. Needs an OpenGL 3.3 driver and glibc 2.35 or newer
+     (Ubuntu 22.04, Debian 12, Fedora 36, or later).
+   - **macOS:** the binary isn't signed, so clear the download quarantine first:
+     ```
+     cd fsvng-v0.10.0-macos-arm64
+     xattr -dr com.apple.quarantine .
+     ./fsvng ~/Documents
+     ```
 
----
+A window opens, the status bar counts files while the folder is scanned, and the view appears.
+Large folders (hundreds of thousands of files) take a while to scan.
 
-## Quick Start
+### Step by step: build from source
 
-```bash
-# Clone
-git clone https://github.com/sp00nznet/fsvng.git
-cd fsvng
+Prerequisites: CMake 3.20+, a C++17 compiler (Visual Studio 2022, GCC 9+ or Clang 10+), Python 3
+with `jinja2` (`pip install jinja2`; glad uses it to generate the OpenGL loader), git, and an
+internet connection for the first configure, which downloads SDL2, ImGui, GLM, glad and
+nlohmann/json. On Linux, SDL2 also needs the X11/Wayland headers listed in
+[docs/building.md](docs/building.md).
 
-# Build (dependencies auto-fetched via CMake FetchContent)
-cmake -B build -DFSVNG_BUILD_TESTS=ON
-cmake --build build --config Release
+1. Clone:
+   ```
+   git clone https://github.com/sp00nznet/fsvng.git
+   cd fsvng
+   ```
+2. Configure. The last line should be `-- Build files have been written to: .../fsvng/build`.
+   ```
+   cmake -B build -DCMAKE_BUILD_TYPE=Release -DFSVNG_BUILD_TESTS=ON
+   ```
+3. Build:
+   ```
+   cmake --build build --config Release --parallel
+   ```
+4. Test. Expect `100% tests passed, 0 tests failed out of 7`.
+   ```
+   ctest --test-dir build --build-config Release
+   ```
+5. Run: `build\src\Release\fsvng.exe C:\some\folder` on Windows (Visual Studio generator),
+   `./build/src/fsvng ~/some/folder` elsewhere.
 
-# Run
-./build/src/Release/fsvng          # Windows
-./build/src/fsvng                  # Linux/macOS
+Trip-ups: `ModuleNotFoundError: No module named 'jinja2'` during the build means CMake found a
+Python without jinja2. Install it into that one, or pass `-DPython_EXECUTABLE=` the Python that has
+it. More in [docs/building.md](docs/building.md).
 
-# Or point it at a specific directory
-./build/src/Release/fsvng C:\Users
+## Usage
+
+```
+fsvng [--expand-all] [folder]
 ```
 
-### Prerequisites
-
-- **CMake** 3.20+
-- **C++17 compiler** (MSVC 2019+, GCC 9+, Clang 10+)
-- **OpenGL 3.3** capable GPU
-- That's it. Everything else is fetched automatically.
-
----
-
-## In the browser
-
-fsvng also builds with Emscripten, to WebGL 2. Try it at [sp00.nz/#fsvng](https://sp00.nz/#fsvng).
-
-```bash
-emcmake cmake -S . -B ../fsvng-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DFSVNG_WEB_SAMPLE=/path/to/a/folder
-cmake --build ../fsvng-web    # -> src/fsvng.js, fsvng.wasm, fsvng.data
-```
-
-A page can't read your disk, so the build bundles one folder (`FSVNG_WEB_SAMPLE`, default `src/`)
-and opens it at `/fsvng`. Keep the build directory outside that folder. The differences from the
-desktop are all behind `__EMSCRIPTEN__` and `cmake/Web.cmake`: Emscripten's SDL2 port, GLES 3
-instead of glad, shaders rewritten to GLSL ES 3.00 as they load, the browser driving the main loop,
-and the scan running on the main thread (pages have no threads here).
-
-## Controls
+- `fsvng D:\Projects` shows `D:\Projects`. With no folder, fsvng shows the default path
+  (File > Set Default Path), or else the current folder.
+- `fsvng --expand-all ~/src` expands every folder after the scan, so the whole tree grows in at
+  once. The same is in the right-click menu as **Expand All**, for any folder.
 
 | Input | Action |
 |-------|--------|
-| **Left drag** | Orbit camera |
-| **Right drag** | Pan camera |
-| **Scroll wheel** | Zoom in/out |
-| **W/S or Up/Down** | Dolly forward/back |
-| **A/D or Left/Right** | Strafe left/right |
-| **Q/E** | Move up/down |
-| **Double-click** | Navigate into directory / open file |
-| **Enter** | Expand/collapse current directory |
-| **Backspace** | Navigate back |
-| **Click tree panel** | Navigate to node |
-| **Toolbar: Bird's Eye** | Toggle overhead view |
+| Left drag | Orbit the camera |
+| Right drag | Pan the camera |
+| Right click | Context menu: Expand, Expand All, Collapse, Scan as Root, Look At, Copy Path, Properties. On Windows also Open and the Explorer right-click menu |
+| Scroll wheel | Zoom |
+| W/S or Up/Down | Fly forward/back |
+| A/D or Left/Right | Strafe |
+| Q/E | Down/up |
+| Double-click (MapV) | Fly to the folder or file under the cursor |
+| Enter | Expand/collapse the current folder |
+| Backspace | Back |
+| Escape | Up to the parent folder |
+| Toolbar: Bird's Eye | Toggle the overhead view |
 
----
+**Vis** switches between MapV and TreeV. **Colors** colors files by type, by age, or by filename
+pattern (Configure Colors... edits the patterns). **Themes** has Classic, Tron, Matrix, Synthwave
+and Ember. The view, color mode, theme and window size are remembered in `config.json`:
+`%APPDATA%\fsvng` on Windows, `~/Library/Application Support/fsvng` on macOS,
+`~/.config/fsvng` (or `$XDG_CONFIG_HOME/fsvng`) on Linux.
 
-## Tech Stack
+### In the browser
 
-All dependencies are fetched at build time. Zero manual installs.
+fsvng also builds with Emscripten, to WebGL 2. Try it at [sp00.nz/#fsvng](https://sp00.nz/#fsvng).
+A page can't read your disk, so the web build bundles one folder. See
+[docs/building.md](docs/building.md#browser-emscripten).
 
-| Component | Library |
-|-----------|---------|
-| Windowing | SDL2 |
-| GUI | Dear ImGui (docking branch) |
-| 3D Rendering | OpenGL 3.3 Core + custom shaders |
-| GL Loading | glad |
-| Math | GLM |
-| Config | nlohmann/json |
-| Testing | Google Test |
+## Building from source
 
----
-
-## Project Structure
-
-```
-fsvng/
-  cmake/              CMake dependency fetching
-  shaders/             GLSL vertex/fragment shaders
-  src/
-    app/               Application lifecycle + config
-    core/              FsNode, FsTree, scanner, types
-    animation/         Morph engine, scheduler, frame loop
-    camera/            Mode-specific cameras + view matrices
-    renderer/          Shaders, meshes, text, picking
-    geometry/          MapV/TreeV/DiscV layout algorithms
-    color/             Color assignment (type/timestamp/wildcard)
-    ui/                ImGui panels, toolbar, menus, dialogs
-  tests/               Google Test suites (26 tests)
-  docs/                Architecture & porting notes
-```
-
----
-
-## Running Tests
-
-```bash
-cd build
-ctest --build-config Release --output-on-failure
-```
-
-All 26 tests across 7 test executables should pass.
-
----
-
-## Lineage
-
-The original **fsv** was written in 1999 by [Daniel Richard G.](mailto:skunk@mit.edu) using GTK+ 1.2 and fixed-function OpenGL. It was brilliant but hasn't compiled on anything modern since roughly the Bush administration.
-
-**fsvng** is a complete rewrite: ~82 new C++17 source files replacing ~25,000 lines of C. The visualization algorithms (treemap packing, radial tree layout, disc arrangement) are faithfully ported. Everything else is modern.
-
-See [docs/PORTING.md](docs/PORTING.md) for the full archaeology report.
-
----
+The short version is under Getting Started. [docs/building.md](docs/building.md) has every
+platform, the browser build, and troubleshooting. The design is in
+[docs/architecture.md](docs/architecture.md), what came over from fsv and what changed is in
+[docs/porting.md](docs/porting.md), and the TreeV layout and camera traps are in
+[docs/treev.md](docs/treev.md). How the screenshots above are made: [docs/screenshots.md](docs/screenshots.md).
 
 ## License
 
-LGPL-2.1-or-later, same as the original fsv (LGPL v2 "or any later version"). See [COPYING](COPYING) for details.
+LGPL-2.1-or-later, the same as the original fsv (LGPL version 2 "or any later version"). See
+[LICENSE](LICENSE). Release binaries also contain SDL2, Dear ImGui, GLM, glad and nlohmann/json;
+[NOTICE](NOTICE) lists them, and why the binaries go out under LGPL version 3.
+
+The original **fsv** is by Daniel Richard G. (1999), written for GTK+ 1.2 and fixed-function
+OpenGL. Its layout, camera and animation algorithms are ported here; everything around them is new.

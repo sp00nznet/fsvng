@@ -1,4 +1,7 @@
-# Porting Notes: fsv (1999) -> fsvng (2025)
+# Porting Notes: fsv (1999) -> fsvng (2026)
+
+The fsv 0.9 sources were kept in this repository until v0.10.0. They are in git history before
+that, and in the upstream tarball.
 
 ## What Was fsv?
 
@@ -42,13 +45,14 @@ None of this compiles on any modern system.
 |-----|-------|
 | `GNode` tree + `NodeDesc` struct | `FsNode` with `vector<unique_ptr<FsNode>>` children |
 | `DirNodeDesc` separate struct | Fields merged into `FsNode` |
-| `geomparams[5]` void* array + casts | Typed structs: `DiscVGeomParams`, `MapVGeomParams`, `TreeVGeomParams` |
+| `geomparams[5]` void* array + casts | Typed structs: `MapVGeomParams`, `TreeVGeomParams` |
 | Global variables everywhere | Singleton classes |
 | `GHashTable` for node lookup | `std::unordered_map` in FsTree |
 
 ### Visualization Algorithms
 
-The three visualization algorithms were **faithfully ported**:
+MapV and TreeV were **faithfully ported**. DiscV was ported too, then removed in 7adc401; it is
+in git history before that.
 
 #### MapV (Treemap) - `geometry.c:474-1202` -> `MapVLayout.cpp`
 - Treemap packing algorithm preserved exactly
@@ -62,13 +66,8 @@ The three visualization algorithms were **faithfully ported**:
 - Leaf node layout on platform surfaces
 - `MIN_CORE_RADIUS=8192`, `LEAF_NODE_EDGE=256` constants preserved
 
-#### DiscV (Circular) - `geometry.c:73-452` -> `DiscVLayout.cpp`
-- Disc arrangement algorithm preserved
-- Stagger logic for tight-fit layouts
-- Folder outline ring + tab indicator (completing the original WIP)
-
 ### Camera System - `camera.c` -> `Camera.cpp`
-- All camera modes ported (DiscV top-down, MapV orbital, TreeV cylindrical)
+- Camera modes ported (MapV orbital, TreeV cylindrical)
 - Morph-driven pans with swing-back for long MapV travels
 - Two-stage L-shaped pan for TreeV
 - Bird's-eye view toggle
@@ -90,10 +89,13 @@ The three visualization algorithms were **faithfully ported**:
 1. **Cross-platform support** - Windows + macOS + Linux
 2. **Background scanning** - UI stays responsive during filesystem scan
 3. **Right-click panning** - Pan the camera target in all modes
-4. **Screen-space text labels** - File/folder names overlaid on MapV view
+4. **Screen-space text labels** - File/folder names overlaid on the MapV and TreeV views, skipping any that would overlap
 5. **Default path** - Configurable startup directory with JSON persistence
 6. **Docking UI** - ImGui docking allows rearranging panels
 7. **Modern shader pipeline** - Per-fragment lighting instead of fixed-function
+8. **Themes** - Classic, Tron, Matrix, Synthwave, Ember
+9. **Expand All** - Right-click menu and `--expand-all`
+10. **Browser build** - Emscripten / WebGL 2
 
 ## Source File Mapping
 
@@ -106,7 +108,7 @@ The three visualization algorithms were **faithfully ported**:
 | `animation.c` | `animation/Morph.cpp` + `Animation.cpp` + `Scheduler.cpp` |
 | `camera.c` | `camera/Camera.cpp` |
 | `ogl.c` | `renderer/Renderer.cpp` + `ViewportPanel.cpp` |
-| `geometry.c` | `geometry/MapVLayout.cpp` + `TreeVLayout.cpp` + `DiscVLayout.cpp` + `GeometryManager.cpp` |
+| `geometry.c` | `geometry/MapVLayout.cpp` + `TreeVLayout.cpp` + `GeometryManager.cpp` |
 | `colexp.c` | `geometry/CollapseExpand.cpp` |
 | `color.c` | `color/ColorSystem.cpp` + `Spectrum.cpp` |
 | `tmaptext.c` | `renderer/TextRenderer.cpp` |

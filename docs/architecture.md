@@ -17,21 +17,21 @@ App::run()
 
 ### Core (`src/core/`)
 - **Types.h** - Fundamental types: RGBcolor, XYvec, XYZvec, RTvec, RTZvec, NodeType, FsvMode
-- **FsNode** - Unified filesystem node. Owns children via `vector<unique_ptr<FsNode>>`. Carries per-mode geometry params (DiscV/MapV/TreeV) directly on the node.
+- **FsNode** - Unified filesystem node. Owns children via `vector<unique_ptr<FsNode>>`. Carries per-mode geometry params (MapV/TreeV) directly on the node.
 - **FsTree** - Singleton tree container with lookup by ID/path
 - **FsScanner** - Background-thread filesystem scanner using `std::filesystem`
 - **PlatformUtils** - Cross-platform user/group names, size formatting
 
 ### Animation (`src/animation/`)
-- **Morph** - Tween engine with 5 easing functions (linear, quadratic, inv_quadratic, sigmoid, sigmoid_accel). Supports chained morphs and step/end callbacks.
+- **Morph** - Tween engine with 5 easing functions (linear, quadratic, inv_quadratic, sigmoid, sigmoid_accel). Supports chained morphs and step/end callbacks. `shift()` moves a value together with any morph running on it.
 - **Animation** - Frame loop driver, redraw requests, framerate tracking
 - **Scheduler** - Delayed event queue (fire callback after N frames)
 
 ### Camera (`src/camera/`)
 - **Camera** - Mode-specific camera states stored in a union. Supports revolve, dolly, pan, lookAt (with morph animation), and bird's-eye view toggle.
   - MapV: XYZ target + spherical coordinates (theta/phi/distance)
-  - TreeV: RTZ cylindrical target + spherical offset
-  - DiscV: XY target + top-down distance
+  - TreeV: RTZ cylindrical target + spherical offset. The target radius is absolute, so it has to
+    move when the TreeV core radius does: see [treev.md](treev.md)
 
 ### Renderer (`src/renderer/`)
 - **ShaderProgram** - GLSL compile/link wrapper
@@ -42,30 +42,29 @@ App::run()
 - **SplashRenderer** - 3D "fsv" logo animation
 
 ### Geometry (`src/geometry/`)
-- **GeometryManager** - Mode dispatch + helper calculations (MapV z-stacking, TreeV extents, DiscV positions)
+- **GeometryManager** - Mode dispatch + helper calculations (MapV z-stacking, TreeV absolute radius/angle)
 - **MapVLayout** - Treemap packing algorithm. Builds slanted-box meshes.
-- **TreeVLayout** - Radial tree with Maple-derived cubic reshaping. Platforms arranged on concentric rings.
-- **DiscVLayout** - Circular disc arrangement. Parent discs with child discs branching outward.
-- **CollapseExpand** - Directory expand/collapse animation via deployment morphs
+- **TreeVLayout** - Radial tree with Maple-derived cubic reshaping. Platforms arranged on concentric rings. Traps: [treev.md](treev.md)
+- **CollapseExpand** - Directory expand/collapse animation via deployment morphs. Expand All (`ExpandRecursive`) marks the whole subtree expanded in the tree panel too, because TreeV reads the panel to decide what is a leaf
 
 ### Color (`src/color/`)
 - **ColorSystem** - Three color assignment modes: by node type, by modification timestamp (rainbow spectrum), by wildcard pattern
 - **Spectrum** - 1024-shade rainbow and heat gradients
 
 ### UI (`src/ui/`)
-- **ImGuiBackend** - SDL2+OpenGL ImGui initialization
+- **ImGuiBackend** - SDL2+OpenGL ImGui initialization. Points `imgui.ini` (panel layout) at the config folder
 - **MainWindow** - Dockspace layout, navigation state, mode/color management, background scanning
 - **DirTreePanel** - Directory tree using `ImGui::TreeNodeEx`
 - **FileListPanel** - File list using `ImGui::BeginTable`
 - **ViewportPanel** - 3D viewport rendering to FBO, displayed as `ImGui::Image`, with screen-space text label overlay
-- **MenuBar** - File/Vis/Colors/Help menus
+- **MenuBar** - File/Vis/Colors/Themes/Help menus
 - **Toolbar** - Back, CD Root, CD Up, Bird's Eye, mode radio buttons
 - **StatusBar** - Status messages
-- **Dialogs** - Change Root, Set Default Path, Color Config, About, Context Menu
+- **Dialogs** - Change Root, Set Default Path, Color Config, About, Properties, the right-click menu (and on Windows the native Explorer menu)
 
 ### App (`src/app/`)
-- **App** - SDL2 window, OpenGL context, main loop
-- **Config** - JSON config persistence (`%APPDATA%/fsvng/config.json` on Windows, `~/.config/fsvng/config.json` on Linux/macOS)
+- **App** - Command line (`[--expand-all] [path]`), SDL2 window, OpenGL context, main loop. Loads the config before creating the window, applies the saved view mode, color mode, theme and window size, and saves them on exit
+- **Config** - JSON config persistence: `%APPDATA%\fsvng\config.json` on Windows, `~/Library/Application Support/fsvng/config.json` on macOS, `$XDG_CONFIG_HOME/fsvng/config.json` or `~/.config/fsvng/config.json` on Linux
 
 ## Data Flow
 
@@ -82,6 +81,7 @@ User action (startup / File > Change Root)
         -> DirTreePanel::setEntryExpanded(rootDir)
         -> GeometryManager::init(mode) -> Layout::init()
         -> Camera::init(mode)
+        -> with --expand-all, once: CollapseExpand(rootDir, ExpandRecursive)
 ```
 
 ### Rendering Pipeline
@@ -102,7 +102,7 @@ ViewportPanel::draw()
 
 ## Key Design Decisions
 
-1. **Geometry params on FsNode**: Each node carries DiscV/MapV/TreeV geometry structs directly. This avoids external maps and makes tree traversal during layout/draw simple.
+1. **Geometry params on FsNode**: Each node carries MapV/TreeV geometry structs directly. This avoids external maps and makes tree traversal during layout/draw simple.
 
 2. **FBO-based viewport**: The 3D scene renders to an offscreen framebuffer, then displays as an ImGui image. This integrates cleanly with ImGui's docking system.
 
@@ -110,4 +110,4 @@ ViewportPanel::draw()
 
 4. **No backface culling**: MapV box geometry has mixed winding order (the slanted side faces), so face culling is globally disabled during viewport rendering.
 
-5. **Root directory auto-expansion**: The root directory is always set as expanded in DirTreePanel before geometry init. Without this, `initRecursive` sets deployment=0 and DiscV renders nothing.
+5. **Root directory auto-expansion**: The root directory is always set as expanded in DirTreePanel before geometry init. Without this, `initRecursive` sets deployment=0 and the root starts collapsed.

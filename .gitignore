@@ -42,3 +42,9 @@ _deps/
 
 # Config
 nul
+
+# Runtime files fsvng writes when it can't find a config folder, and stray debug output
+imgui.ini
+fsvng_imgui.ini
+fsvng_config.json
+*.log

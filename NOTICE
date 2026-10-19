@@ -1,0 +1,38 @@
+fsvng
+Copyright (C) 2026 sp00nz
+Licensed under the GNU Lesser General Public License, version 2.1 or (at your option) any
+later version. See LICENSE.
+
+ORIGINAL WORK
+
+fsvng is a C++ rewrite of fsv 0.9, the 3D File System Visualizer:
+    Copyright (C) 1999 Daniel Richard G. <skunk@mit.edu>
+    http://fsv.sourceforge.net/
+    Licensed under the GNU Lesser General Public License, version 2 or any later version.
+The layout, camera and animation algorithms in src/geometry, src/camera and src/animation are
+ported from fsv's geometry.c, camera.c, animation.c and colexp.c, and stay under that licence.
+The fsv 0.9 sources themselves were removed from this repository's tree on 2026-10-19; they
+remain in its git history and in the upstream release tarball.
+
+THIRD-PARTY CODE IN RELEASE BINARIES
+
+None of this code is in the repository. CMake fetches it at build time
+(cmake/FetchDependencies.cmake) and links it statically into fsvng. Each release archive
+carries the licence texts below in LICENSES/, copied verbatim from the fetched sources.
+
+| Component      | Version          | Licence                                  | LICENSES/ file       |
+|----------------|------------------|------------------------------------------|----------------------|
+| SDL2           | 2.30.10          | zlib                                     | SDL2.txt             |
+| Dear ImGui     | 1.93.0 (docking) | MIT                                      | imgui.txt            |
+| GLM            | 1.0.1            | MIT (or the Happy Bunny License)         | glm.txt              |
+| glad           | 2.0.8            | MIT (generator); generated loader is     | glad.txt             |
+|                |                  | (WTFPL or CC0-1.0) and Apache-2.0        |                      |
+|                |                  | (Khronos OpenGL registry)                |                      |
+| nlohmann/json  | 3.11.3           | MIT                                      | nlohmann-json.txt    |
+
+Google Test (BSD-3-Clause) is fetched only for the test suite and is not in release binaries.
+
+Apache-2.0 is compatible with version 3 of the LGPL but not with version 2.1, so release
+binaries, which include the glad loader, are distributed under LGPL version 3, as the
+"or any later version" clause allows. Its text is LICENSES/LGPL-3.0.txt, and the GPL version 3
+it builds on is LICENSES/GPL-3.0.txt.

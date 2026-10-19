@@ -37,7 +37,7 @@ endif()
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        docking
+    GIT_TAG        v1.93.0-docking   # pinned: the bare docking branch moves under releases
     GIT_SHALLOW    TRUE
 )
 
