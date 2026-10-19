@@ -162,4 +162,4 @@ See [docs/PORTING.md](docs/PORTING.md) for the full archaeology report.
 
 ## License
 
-GPL-2.0, same as the original fsv. See [COPYING](COPYING) for details.
+LGPL-2.1-or-later, same as the original fsv (LGPL v2 "or any later version"). See [COPYING](COPYING) for details.
