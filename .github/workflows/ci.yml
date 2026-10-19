@@ -41,7 +41,10 @@ jobs:
             libwayland-dev libxkbcommon-dev libdecor-0-dev
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DFSVNG_BUILD_TESTS=ON
+        # Pin glad to the Python that has jinja2; left alone, CMake picks the newest one it finds.
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DFSVNG_BUILD_TESTS=ON \
+            -DPython_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
       - name: Build
         run: cmake --build build --config Release --parallel
