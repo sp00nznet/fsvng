@@ -261,6 +261,12 @@ void MainWindow::initVisualization() {
     Camera::instance().lookAt(rootDir);
 
     visualizationReady_ = true;
+
+    // --expand-all: grow the whole tree once, after the first scan
+    if (expandAllOnLoad_) {
+        expandAllOnLoad_ = false;
+        CollapseExpand::instance().execute(rootDir, ColExpAction::ExpandRecursive);
+    }
 }
 
 void MainWindow::scanThreadFunc(const std::string& path) {

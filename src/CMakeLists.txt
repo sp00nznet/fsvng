@@ -49,6 +49,7 @@ set(FSVNG_SOURCES
 )
 
 add_executable(fsvng ${FSVNG_SOURCES})
+target_compile_definitions(fsvng PRIVATE FSVNG_VERSION="${PROJECT_VERSION}")
 
 target_link_libraries(fsvng PRIVATE
     fsvng_core

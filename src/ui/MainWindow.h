@@ -21,6 +21,7 @@ public:
 
     void draw();
     void setInitialPath(const std::string& path);
+    void setExpandAllOnLoad(bool on) { expandAllOnLoad_ = on; }   // --expand-all
 
     // Request a scan - runs on a background thread
     void requestScan(const std::string& path);
@@ -61,6 +62,7 @@ private:
     bool firstFrame_ = true;
     bool dockspaceInitialized_ = false;
     std::string initialPath_;
+    bool expandAllOnLoad_ = false;
     std::string pendingScanPath_;
 
     // Background scan state

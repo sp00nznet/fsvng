@@ -38,8 +38,11 @@ App& App::instance() {
 
 bool App::init(int argc, char* argv[]) {
     // Parse command-line arguments
-    if (argc > 1) {
-        initialPath_ = argv[1];
+    // fsvng [--expand-all] [path]
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--expand-all") MainWindow::instance().setExpandAllOnLoad(true);
+        else initialPath_ = arg;
     }
 
     // Initialize SDL
@@ -70,6 +73,11 @@ bool App::init(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
+    // Config first: it holds the window size from last time
+    Config::instance().load();
+    windowWidth_ = Config::instance().windowWidth;
+    windowHeight_ = Config::instance().windowHeight;
+
     Uint32 windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
     window_ = SDL_CreateWindow(
         "fsvng - 3D File System Visualizer",
@@ -97,9 +105,6 @@ bool App::init(int argc, char* argv[]) {
         return false;
     }
 
-    // Load config
-    Config::instance().load();
-
     // Initialize ImGui
     ImGuiBackend::init(window_, glContext_);
 
@@ -112,6 +117,8 @@ bool App::init(int argc, char* argv[]) {
     // Initialize theme system
     ThemeManager::instance().init();
     ThemeManager::instance().setThemeById(Config::instance().themeName);
+    MainWindow::instance().setMode(Config::instance().lastMode);
+    MainWindow::instance().setColorMode(Config::instance().colorMode);
 
     // Initialize animation system
     Animation::instance().init();
@@ -160,6 +167,10 @@ void App::run() {
 
 void App::shutdown() {
     Config::instance().themeName = ThemeManager::instance().currentTheme().id;
+    Config::instance().lastMode = MainWindow::instance().getMode();
+    Config::instance().colorMode = MainWindow::instance().getColorMode();
+    Config::instance().windowWidth = windowWidth_;
+    Config::instance().windowHeight = windowHeight_;
     Config::instance().save();
     Renderer::instance().shutdown();
     ImGuiBackend::shutdown();

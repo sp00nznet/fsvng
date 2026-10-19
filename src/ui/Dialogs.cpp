@@ -207,7 +207,7 @@ void Dialogs::drawAbout() {
 
     if (ImGui::BeginPopupModal("About fsvng", &showAbout_,
                                 ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("fsvng - 3D File System Visualizer");
+        ImGui::Text("fsvng %s - 3D File System Visualizer", FSVNG_VERSION);
         ImGui::Spacing();
         ImGui::Text("A modern C++17 reimplementation of fsv.");
         ImGui::Text("Visualize your filesystem in 3D with");
@@ -313,6 +313,9 @@ void Dialogs::drawContextMenuPopup(const char* popupId, FsNode* node) {
                 bool isExpanded = DirTreePanel::instance().isEntryExpanded(node);
                 if (!isExpanded && ImGui::MenuItem("Expand")) {
                     CollapseExpand::instance().execute(node, ColExpAction::Expand);
+                }
+                if (ImGui::MenuItem("Expand All")) {
+                    CollapseExpand::instance().execute(node, ColExpAction::ExpandRecursive);
                 }
                 if (isExpanded && ImGui::MenuItem("Collapse")) {
                     CollapseExpand::instance().execute(node, ColExpAction::CollapseRecursive);

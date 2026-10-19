@@ -5,6 +5,9 @@
 #include <imgui_impl_opengl3.h>
 #include <SDL.h>
 #include <glad/gl.h>
+#include <string>
+
+#include "app/Config.h"
 
 namespace fsvng {
 
@@ -15,6 +18,16 @@ void ImGuiBackend::init(SDL_Window* window, SDL_GLContext glContext) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    // Keep the panel layout next to config.json, not in whatever folder fsvng was started from
+    static std::string iniPath = [] {
+        std::string p = Config::getConfigPath();
+        const std::string name = "config.json";
+        return p.size() > name.size() && p.compare(p.size() - name.size(), name.size(), name) == 0
+            ? p.substr(0, p.size() - name.size()) + "imgui.ini"
+            : std::string("fsvng_imgui.ini");
+    }();
+    io.IniFilename = iniPath.c_str();
 #ifndef __EMSCRIPTEN__
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // a page has one canvas
 #endif

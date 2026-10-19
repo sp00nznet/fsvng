@@ -1,6 +1,7 @@
 #include "app/Config.h"
 #include "core/PlatformUtils.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -223,7 +224,7 @@ void Config::fromJson(const nlohmann::json& j) {
     }
     if (j.contains("lastMode") && j["lastMode"].is_number_integer()) {
         int m = j["lastMode"].get<int>();
-        if (m >= FSV_MAPV && m <= FSV_NONE) {
+        if (m == FSV_MAPV || m == FSV_TREEV) {   // only modes a user can pick
             lastMode = static_cast<FsvMode>(m);
         }
     }
@@ -235,10 +236,10 @@ void Config::fromJson(const nlohmann::json& j) {
     if (j.contains("window") && j["window"].is_object()) {
         const auto& jw = j["window"];
         if (jw.contains("width") && jw["width"].is_number_integer()) {
-            windowWidth = jw["width"].get<int>();
+            windowWidth = std::max(320, jw["width"].get<int>());   // a bad file must not hide the window
         }
         if (jw.contains("height") && jw["height"].is_number_integer()) {
-            windowHeight = jw["height"].get<int>();
+            windowHeight = std::max(320, jw["height"].get<int>());   // a bad file must not hide the window
         }
     }
 
