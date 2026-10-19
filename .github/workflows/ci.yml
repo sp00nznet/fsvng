@@ -1,0 +1,84 @@
+name: CI
+
+# Build + test on every push/PR to main. Pushing a v* tag also packages
+# binaries for all three platforms and publishes a GitHub Release.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows-x64 }
+          - { os: ubuntu-22.04,   name: linux-x64 }   # older glibc = runs on more distros
+          - { os: macos-latest,   name: macos-arm64 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux deps (SDL2 is built from source and needs the X11/Wayland headers)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libx11-dev libxext-dev \
+            libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxfixes-dev \
+            libwayland-dev libxkbcommon-dev libdecor-0-dev
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DFSVNG_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          pkg="fsvng-${GITHUB_REF_NAME}-${{ matrix.name }}"
+          mkdir -p "$pkg"
+          if [ "$RUNNER_OS" = Windows ]; then bin=build/src/Release; else bin=build/src; fi
+          cp -r "$bin"/fsvng* "$bin/shaders" COPYING README.md "$pkg/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z a "$pkg.zip" "$pkg" >/dev/null
+          else
+            tar czf "$pkg.tar.gz" "$pkg"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: ${{ matrix.name }}
+          path: fsvng-*.*z*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release (notes = this version's CHANGELOG section)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="$ver" '/^## \[/{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "No CHANGELOG.md section for $ver"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" dist/* --title "fsvng $GITHUB_REF_NAME" --notes-file notes.md

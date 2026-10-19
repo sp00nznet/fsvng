@@ -2,6 +2,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
+#include <SDL.h>
 
 namespace fsvng {
 
@@ -107,8 +108,12 @@ void Renderer::renderFrame(GLuint targetFBO, int width, int height) {
 }
 
 void Renderer::loadShaders() {
-    // Shader file paths (relative to working directory)
-    const std::string shaderDir = "shaders/";
+    // Shaders ship next to the executable; don't depend on the working directory.
+    std::string shaderDir = "shaders/";
+    if (char* base = SDL_GetBasePath()) {
+        shaderDir = std::string(base) + "shaders/";
+        SDL_free(base);
+    }
 
     if (!nodeShader_.loadFromFiles(shaderDir + "node.vert", shaderDir + "node.frag")) {
         std::cerr << "Renderer: Failed to load node shader" << std::endl;
