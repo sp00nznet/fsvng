@@ -97,6 +97,15 @@ void MorphEngine::morphBreak(double* var) {
     }
 }
 
+void MorphEngine::shift(double* var, double delta) {
+    *var += delta;
+    auto it = findByVar(var);
+    for (Morph* m = (it == morphQueue_.end()) ? nullptr : *it; m != nullptr; m = m->next) {
+        m->startValue += delta;
+        m->endValue += delta;
+    }
+}
+
 bool MorphEngine::iteration() {
     double tNow = PlatformUtils::getTime();
     bool stateChanged = false;

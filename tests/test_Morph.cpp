@@ -71,3 +71,22 @@ TEST(MorphTest, EasingFunctions) {
         engine.morphBreak(&vars[i]);
     }
 }
+
+// shift() moves a morph's destination with the value: the TreeV camera relies on this
+// when the core radius grows mid-pan (see TreeVLayout::arrange)
+TEST(MorphTest, ShiftMovesDestination) {
+    double var = 0.0;
+    auto& engine = MorphEngine::instance();
+
+    engine.morph(&var, MorphType::Linear, 100.0, 10.0); // long duration
+    engine.shift(&var, 1000.0);
+    EXPECT_DOUBLE_EQ(var, 1000.0);
+
+    engine.morphFinish(&var);
+    engine.iteration();
+    EXPECT_DOUBLE_EQ(var, 1100.0);
+
+    double idle = 5.0;
+    engine.shift(&idle, 2.0); // no morph running: just adds
+    EXPECT_DOUBLE_EQ(idle, 7.0);
+}

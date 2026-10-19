@@ -17,6 +17,17 @@ CollapseExpand& CollapseExpand::instance() {
     return inst;
 }
 
+// Mark a whole subtree expanded/collapsed in the tree panel. TreeV decides what is a
+// leaf from this state, so it must cover every level: a deep folder left marked collapsed
+// keeps a stale arc width, and TreeV's core-radius loop then grows without bound (docs/treev.md).
+static void setTreeExpandedRecursive(FsNode* dnode, bool expanded) {
+    DirTreePanel::instance().setEntryExpanded(dnode, expanded);
+    for (auto& childPtr : dnode->children) {
+        if (childPtr->isDir())
+            setTreeExpandedRecursive(childPtr.get(), expanded);
+    }
+}
+
 // ============================================================================
 // collapsedDepth - port of collapsed_depth
 // Returns the number of collapsed directory levels above the given directory
@@ -95,13 +106,7 @@ void CollapseExpand::execute(FsNode* dnode, ColExpAction action) {
         switch (action) {
             case ColExpAction::CollapseRecursive:
                 // Collapse this node and all children in the tree panel
-                dirTree.setEntryExpanded(dnode, false);
-                // Recursively collapse children in tree panel
-                for (auto& childPtr : dnode->children) {
-                    FsNode* node = childPtr.get();
-                    if (node->isDir())
-                        dirTree.setEntryExpanded(node, false);
-                }
+                setTreeExpandedRecursive(dnode, false);
                 maxDepthStatic = maxExpandedDepth(dnode);
                 break;
 
@@ -116,13 +121,7 @@ void CollapseExpand::execute(FsNode* dnode, ColExpAction action) {
                 break;
 
             case ColExpAction::ExpandRecursive:
-                dirTree.setEntryExpanded(dnode, true);
-                // Recursively expand children in tree panel
-                for (auto& childPtr : dnode->children) {
-                    FsNode* node = childPtr.get();
-                    if (node->isDir())
-                        dirTree.setEntryExpanded(node, true);
-                }
+                setTreeExpandedRecursive(dnode, true);
                 // max_depth will be used as a high-water mark
                 maxDepthStatic = 0;
                 break;

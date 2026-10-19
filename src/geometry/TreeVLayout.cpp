@@ -1,5 +1,6 @@
 #include "geometry/TreeVLayout.h"
 #include "geometry/GeometryManager.h"
+#include "camera/Camera.h"
 #include "core/FsNode.h"
 #include "core/FsTree.h"
 #include "ui/DirTreePanel.h"
@@ -156,12 +157,15 @@ void TreeVLayout::arrange(bool initialArrange) {
     FsNode* rootDir = FsTree::instance().rootDir();
     if (!rootDir) return;
 
+    const double oldCoreRadius = coreRadius_;
     double rootR0 = coreRadius_ + PLATFORM_SPACING_DEPTH;
     arrangeRecursive(rootDir, rootR0, initialArrange);
     rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
 
-    // Check that the tree's total arc width is within bounds
-    for (;;) {
+    // Check that the tree's total arc width is within bounds.
+    // Capped: if widths stop responding to the radius, give up overlapping rather than
+    // growing the core until it overflows to NaN and the whole view vanishes. docs/treev.md
+    for (int tries = 0; tries < 64; ++tries) {
         double subtreeArc = rootDir->treevGeom.platform.subtree_arc_width;
         if (subtreeArc > MAX_ARC_WIDTH) {
             // Grow core radius
@@ -180,6 +184,12 @@ void TreeVLayout::arrange(bool initialArrange) {
             break;
         }
     }
+
+    // The whole tree just moved in or out with the core; move the camera with it,
+    // or it is left staring at where the tree used to be.
+    if (coreRadius_ != oldCoreRadius)
+        MorphEngine::instance().shift(&Camera::instance().treevState().target.r,
+                                      coreRadius_ - oldCoreRadius);
 }
 
 // ============================================================================
@@ -261,8 +271,8 @@ void TreeVLayout::init() {
     // Override rootDir's arc_width to fill the entire ring
     rootDir->treevGeom.platform.arc_width = MAX_ARC_WIDTH;
 
-    // Core radius adjustment loop
-    for (;;) {
+    // Core radius adjustment loop (capped, see arrange())
+    for (int tries = 0; tries < 64; ++tries) {
         double subtreeArc = rootDir->treevGeom.platform.subtree_arc_width;
         if (subtreeArc > MAX_ARC_WIDTH) {
             coreRadius_ *= CORE_GROW_FACTOR;

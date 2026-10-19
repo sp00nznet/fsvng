@@ -47,6 +47,9 @@ public:
 
     // Cancel morph (no callbacks called)
     void morphBreak(double* var);
+    // Add delta to var and to every stage of a morph running on it, so it lands
+    // where it was headed relative to something that just moved
+    void shift(double* var, double delta);
 
     // Update all morphs. Returns true if any state changed.
     bool iteration();
