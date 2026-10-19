@@ -276,6 +276,19 @@ FsNode* ViewportPanel::hitTestMapVRecursive(FsNode* dnode, float mx, float my,
 }
 
 // ============================================================================
+// Label overlap rejection
+// ============================================================================
+
+// Each placed label is stored as ImVec4(x1, y1, x2, y2)
+static bool overlapsAny(const std::vector<ImVec4>& placed, float x1, float y1, float x2, float y2) {
+    for (const auto& r : placed) {
+        if (x1 < r.z && x2 > r.x && y1 < r.w && y2 > r.y)
+            return true;
+    }
+    return false;
+}
+
+// ============================================================================
 // MapV text label overlay
 // ============================================================================
 
@@ -284,16 +297,20 @@ void ViewportPanel::drawMapVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImV
     if (!rootDir) return;
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
+    std::vector<ImVec4> placedLabels;
 
-    drawMapVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0.0, 0);
+    drawMapVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0.0, 0, placedLabels);
 }
 
 void ViewportPanel::drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
                                              ImVec2 imgPos, ImVec2 imgSize,
-                                             ImDrawList* drawList, double zBase, int depth) {
+                                             ImDrawList* drawList, double zBase, int depth,
+                                             std::vector<ImVec4>& placedLabels) {
     if (depth > 20) return;
 
     double childZBase = zBase + dnode->mapvGeom.height;
+    const Theme& theme = ThemeManager::instance().currentTheme();
+    constexpr float LABEL_PAD = 2.0f; // padding between labels
 
     for (auto& childPtr : dnode->children) {
         FsNode* node = childPtr.get();
@@ -340,21 +357,32 @@ void ViewportPanel::drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& view
                         ImVec2 textSize = ImGui::CalcTextSize(name);
 
                         float maxTextWidth = screenW * 0.9f;
-                        if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
-                            float textX = cx - maxTextWidth * 0.5f;
-                            float textY = cy - textSize.y * 0.5f;
-                            drawList->PushClipRect(
-                                ImVec2(textX, textY),
-                                ImVec2(textX + maxTextWidth, textY + textSize.y),
-                                true
-                            );
-                            drawList->AddText(ImVec2(textX, textY), ThemeManager::instance().currentTheme().labelColor, name);
-                            drawList->PopClipRect();
-                        } else if (textSize.x <= maxTextWidth || screenSize > 60.0f) {
-                            float textX = cx - textSize.x * 0.5f;
-                            float textY = cy - textSize.y * 0.5f;
-                            drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), ThemeManager::instance().currentTheme().labelShadow, name);
-                            drawList->AddText(ImVec2(textX, textY), ThemeManager::instance().currentTheme().labelColor, name);
+                        float drawW = std::min(textSize.x, maxTextWidth);
+                        if (drawW < 20.0f) drawW = textSize.x; // don't clip too small
+                        float textX = cx - drawW * 0.5f;
+                        float textY = cy - textSize.y * 0.5f;
+
+                        // Check overlap before drawing
+                        float lx1 = textX - LABEL_PAD;
+                        float ly1 = textY - LABEL_PAD;
+                        float lx2 = textX + drawW + LABEL_PAD;
+                        float ly2 = textY + textSize.y + LABEL_PAD;
+
+                        if (!overlapsAny(placedLabels, lx1, ly1, lx2, ly2)) {
+                            placedLabels.push_back(ImVec4(lx1, ly1, lx2, ly2));
+
+                            if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
+                                drawList->PushClipRect(
+                                    ImVec2(textX, textY),
+                                    ImVec2(textX + maxTextWidth, textY + textSize.y),
+                                    true
+                                );
+                                drawList->AddText(ImVec2(textX, textY), theme.labelColor, name);
+                                drawList->PopClipRect();
+                            } else {
+                                drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), theme.labelShadow, name);
+                                drawList->AddText(ImVec2(textX, textY), theme.labelColor, name);
+                            }
                         }
                     }
                 }
@@ -366,7 +394,7 @@ void ViewportPanel::drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& view
         // their children are visible and need labels.
         if (isExpandedDir) {
             drawMapVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList,
-                                     childZBase, depth + 1);
+                                     childZBase, depth + 1, placedLabels);
         }
     }
 }
@@ -380,15 +408,16 @@ void ViewportPanel::drawTreeVLabels(const glm::mat4& viewProj, ImVec2 imgPos, Im
     if (!rootDir) return;
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
+    std::vector<ImVec4> placedLabels;
 
-    drawTreeVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0);
+    drawTreeVLabelsRecursive(rootDir, viewProj, imgPos, imgSize, drawList, 0, placedLabels);
 }
 
-// Helper: draw a label at a given screen position if the node projects large enough
+// Helper: draw a label at a given screen position if it doesn't overlap placed labels
 static void drawTreeVLabel(ImDrawList* drawList, const glm::mat4& viewProj,
                            ImVec2 imgPos, ImVec2 imgSize,
                            const glm::vec3& worldPos, float edgeOffset,
-                           const char* name) {
+                           const char* name, std::vector<ImVec4>& placedLabels) {
     float cx, cy;
     if (!projectToScreen(viewProj, worldPos, imgPos, imgSize, cx, cy)) return;
 
@@ -401,11 +430,23 @@ static void drawTreeVLabel(ImDrawList* drawList, const glm::mat4& viewProj,
 
     ImVec2 textSize = ImGui::CalcTextSize(name);
     const Theme& theme = ThemeManager::instance().currentTheme();
+    constexpr float LABEL_PAD = 2.0f;
 
     float maxTextWidth = screenSize * 0.9f;
+    float drawW = std::min(textSize.x, maxTextWidth);
+    if (drawW < 20.0f) drawW = textSize.x;
+    float textX = cx - drawW * 0.5f;
+    float textY = cy - textSize.y * 0.5f;
+
+    float lx1 = textX - LABEL_PAD;
+    float ly1 = textY - LABEL_PAD;
+    float lx2 = textX + drawW + LABEL_PAD;
+    float ly2 = textY + textSize.y + LABEL_PAD;
+
+    if (overlapsAny(placedLabels, lx1, ly1, lx2, ly2)) return;
+    placedLabels.push_back(ImVec4(lx1, ly1, lx2, ly2));
+
     if (textSize.x > maxTextWidth && maxTextWidth > 20.0f) {
-        float textX = cx - maxTextWidth * 0.5f;
-        float textY = cy - textSize.y * 0.5f;
         drawList->PushClipRect(
             ImVec2(textX, textY),
             ImVec2(textX + maxTextWidth, textY + textSize.y),
@@ -414,8 +455,6 @@ static void drawTreeVLabel(ImDrawList* drawList, const glm::mat4& viewProj,
         drawList->AddText(ImVec2(textX, textY), theme.labelColor, name);
         drawList->PopClipRect();
     } else if (textSize.x <= maxTextWidth || screenSize > 40.0f) {
-        float textX = cx - textSize.x * 0.5f;
-        float textY = cy - textSize.y * 0.5f;
         drawList->AddText(ImVec2(textX + 1.0f, textY + 1.0f), theme.labelShadow, name);
         drawList->AddText(ImVec2(textX, textY), theme.labelColor, name);
     }
@@ -423,7 +462,8 @@ static void drawTreeVLabel(ImDrawList* drawList, const glm::mat4& viewProj,
 
 void ViewportPanel::drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
                                               ImVec2 imgPos, ImVec2 imgSize,
-                                              ImDrawList* drawList, int depth) {
+                                              ImDrawList* drawList, int depth,
+                                              std::vector<ImVec4>& placedLabels) {
     if (depth > 20) return;
 
     GeometryManager& gm = GeometryManager::instance();
@@ -451,12 +491,12 @@ void ViewportPanel::drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& vie
 
             // Label on TOP of leaf
             drawTreeVLabel(drawList, viewProj, imgPos, imgSize,
-                           glm::vec3(worldX, worldY, topZ), 128.0f, name);
+                           glm::vec3(worldX, worldY, topZ), 128.0f, name, placedLabels);
 
             // Label on FRONT face (midpoint of front face height)
             float frontZ = (baseZ + topZ) * 0.5f;
             drawTreeVLabel(drawList, viewProj, imgPos, imgSize,
-                           glm::vec3(worldX, worldY, frontZ), 128.0f, name);
+                           glm::vec3(worldX, worldY, frontZ), 128.0f, name, placedLabels);
         } else {
             double childR0 = gm.treevPlatformR0(node);
             double childTheta = gm.treevPlatformTheta(node);
@@ -469,12 +509,12 @@ void ViewportPanel::drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& vie
 
             // Label on top of platform
             drawTreeVLabel(drawList, viewProj, imgPos, imgSize,
-                           glm::vec3(worldX, worldY, topZ), edgeOffset, name);
+                           glm::vec3(worldX, worldY, topZ), edgeOffset, name, placedLabels);
         }
 
         // Always recurse into expanded directories regardless of projection
         if (isExpandedDir) {
-            drawTreeVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList, depth + 1);
+            drawTreeVLabelsRecursive(node, viewProj, imgPos, imgSize, drawList, depth + 1, placedLabels);
         }
     }
 }

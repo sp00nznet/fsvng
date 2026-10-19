@@ -24,8 +24,40 @@
 #include "geometry/CollapseExpand.h"
 #include "camera/Camera.h"
 #include "ui/PulseEffect.h"
+#include "animation/Morph.h"
 
 namespace fsvng {
+
+// Immediately collapse a directory and all its expanded descendants (no animation).
+// Used when navigating up/back/root so the view updates instantly.
+static void immediateCollapseRecursive(FsNode* dnode) {
+    if (!dnode || !dnode->isDir()) return;
+
+    MorphEngine::instance().morphBreak(&dnode->deployment);
+    dnode->deployment = 0.0;
+    DirTreePanel::instance().setEntryExpanded(dnode, false);
+    GeometryManager::instance().queueRebuild(dnode);
+    dnode->geomExpanded = false;
+
+    for (auto& childPtr : dnode->children) {
+        FsNode* child = childPtr.get();
+        if (child->isDir() && child->deployment > 0.0) {
+            immediateCollapseRecursive(child);
+        }
+    }
+}
+
+// Immediately expand a single directory (no animation).
+// Used when navigating into a directory so contents appear instantly.
+static void immediateExpand(FsNode* dnode) {
+    if (!dnode || !dnode->isDir()) return;
+
+    MorphEngine::instance().morphBreak(&dnode->deployment);
+    dnode->deployment = 1.0;
+    DirTreePanel::instance().setEntryExpanded(dnode, true);
+    GeometryManager::instance().queueRebuild(dnode);
+    dnode->geomExpanded = true;
+}
 
 MainWindow& MainWindow::instance() {
     static MainWindow s;
@@ -79,9 +111,11 @@ void MainWindow::navigateTo(FsNode* node) {
     if (node->isDir()) {
         FileListPanel::instance().showDirectory(node);
 
-        // Auto-expand the directory so its contents are visible in the 3D view
-        if (visualizationReady_ && !DirTreePanel::instance().isEntryExpanded(node)) {
-            CollapseExpand::instance().execute(node, ColExpAction::Expand);
+        // Auto-expand the directory so its contents are visible in the 3D view.
+        // Check deployment (actual render state) not expandedNodes_ (tree panel UI state)
+        // because DirTreePanel can re-add nodes based on ImGui's internal tree state.
+        if (visualizationReady_ && node->isCollapsed()) {
+            immediateExpand(node);
         }
     }
 
@@ -97,6 +131,20 @@ void MainWindow::navigateBack() {
     FsNode* prevNode = navHistory_[navHistoryPos_];
     navHistoryPos_--;
 
+    // Collapse the current directory when going back to an ancestor,
+    // so the zoomed-out view shows it as a single tile
+    if (visualizationReady_ && currentNode_ && currentNode_->isDir() &&
+        !currentNode_->isCollapsed()) {
+        // Check if prevNode is an ancestor of currentNode_
+        bool isAncestor = false;
+        for (FsNode* p = currentNode_->parent; p; p = p->parent) {
+            if (p == prevNode) { isAncestor = true; break; }
+        }
+        if (isAncestor) {
+            immediateCollapseRecursive(currentNode_);
+        }
+    }
+
     currentNode_ = prevNode;
     DirTreePanel::instance().selectNode(prevNode);
     if (prevNode->isDir()) {
@@ -109,9 +157,15 @@ void MainWindow::navigateBack() {
 
 void MainWindow::navigateToRoot() {
     FsNode* rootDir = FsTree::instance().rootDir();
-    if (rootDir) {
-        navigateTo(rootDir);
+    if (!rootDir) return;
+
+    // Collapse the current directory before jumping to root
+    if (visualizationReady_ && currentNode_ && currentNode_ != rootDir &&
+        currentNode_->isDir() && !currentNode_->isCollapsed()) {
+        immediateCollapseRecursive(currentNode_);
     }
+
+    navigateTo(rootDir);
 }
 
 void MainWindow::navigateUp() {
@@ -119,6 +173,13 @@ void MainWindow::navigateUp() {
     FsNode* parent = currentNode_->parent;
     // Don't navigate to the metanode
     if (parent->isMetanode()) return;
+
+    // Collapse the current directory before navigating up so the zoomed-out
+    // view shows it as a single tile instead of its expanded contents
+    if (visualizationReady_ && currentNode_->isDir() && !currentNode_->isCollapsed()) {
+        immediateCollapseRecursive(currentNode_);
+    }
+
     navigateTo(parent);
 }
 
@@ -156,9 +217,9 @@ void MainWindow::navigateToPrevSibling() {
 void MainWindow::toggleExpandCurrent() {
     if (!currentNode_ || !currentNode_->isDir() || !visualizationReady_) return;
     if (DirTreePanel::instance().isEntryExpanded(currentNode_)) {
-        CollapseExpand::instance().execute(currentNode_, ColExpAction::CollapseRecursive);
+        immediateCollapseRecursive(currentNode_);
     } else {
-        CollapseExpand::instance().execute(currentNode_, ColExpAction::Expand);
+        immediateExpand(currentNode_);
     }
 }
 

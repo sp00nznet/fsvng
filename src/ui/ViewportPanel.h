@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include <glad/gl.h>
 #include <glm/glm.hpp>
 #include <imgui.h>
@@ -29,13 +31,15 @@ private:
     void drawMapVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize);
     void drawMapVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
                                   ImVec2 imgPos, ImVec2 imgSize,
-                                  ImDrawList* drawList, double zBase, int depth);
+                                  ImDrawList* drawList, double zBase, int depth,
+                                  std::vector<ImVec4>& placedLabels);
 
     // TreeV text label overlay
     void drawTreeVLabels(const glm::mat4& viewProj, ImVec2 imgPos, ImVec2 imgSize);
     void drawTreeVLabelsRecursive(FsNode* dnode, const glm::mat4& viewProj,
                                    ImVec2 imgPos, ImVec2 imgSize,
-                                   ImDrawList* drawList, int depth);
+                                   ImDrawList* drawList, int depth,
+                                   std::vector<ImVec4>& placedLabels);
 
     // Viewport hit testing
     FsNode* hitTestMapV(float screenX, float screenY);

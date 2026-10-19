@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 namespace fsvng {
 
 class FsNode;
@@ -32,6 +34,7 @@ private:
     bool showProperties_ = false;
 
     FsNode* propertiesNode_ = nullptr;
+    std::string windowsContextMenuPath_;
     char rootPathBuf_[512] = {};
     char defaultPathBuf_[512] = {};
 };

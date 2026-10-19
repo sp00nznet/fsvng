@@ -2,10 +2,16 @@
 
 #include <imgui.h>
 #include <cstring>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <shobjidl.h>
+#include <SDL.h>
+#include <SDL_syswm.h>
+#include "app/App.h"
 #endif
 
 #include "core/FsNode.h"
@@ -17,6 +23,10 @@
 #include "app/Config.h"
 
 namespace fsvng {
+
+#ifdef _WIN32
+static void showWindowsContextMenu(const std::string& path);
+#endif
 
 Dialogs& Dialogs::instance() {
     static Dialogs s;
@@ -55,6 +65,15 @@ void Dialogs::draw() {
     drawColorConfig();
     drawAbout();
     drawProperties();
+
+#ifdef _WIN32
+    // Deferred Windows context menu (must be called outside ImGui popup)
+    if (!windowsContextMenuPath_.empty()) {
+        std::string path = std::move(windowsContextMenuPath_);
+        windowsContextMenuPath_.clear();
+        showWindowsContextMenu(path);
+    }
+#endif
 }
 
 void Dialogs::drawChangeRoot() {
@@ -207,6 +226,83 @@ void Dialogs::drawAbout() {
     }
 }
 
+#ifdef _WIN32
+static void showWindowsContextMenu(const std::string& path) {
+    // Get the HWND from SDL
+    SDL_Window* sdlWin = App::instance().getWindow();
+    if (!sdlWin) return;
+
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version);
+    if (!SDL_GetWindowWMInfo(sdlWin, &wmInfo)) return;
+    HWND hwnd = wmInfo.info.win.window;
+
+    // Normalize path: convert forward slashes to backslashes for Windows Shell API
+    std::string winPath = path;
+    for (char& c : winPath) {
+        if (c == '/') c = '\\';
+    }
+
+    // Convert path to wide string
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, winPath.c_str(), -1, nullptr, 0);
+    if (wlen <= 0) return;
+    std::vector<wchar_t> wpath(wlen);
+    MultiByteToWideChar(CP_UTF8, 0, winPath.c_str(), -1, wpath.data(), wlen);
+
+    // Initialize COM (S_FALSE means already initialized - that's fine)
+    HRESULT comHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    bool comOwned = (comHr == S_OK);
+
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    HRESULT hr = SHParseDisplayName(wpath.data(), nullptr, &pidl, 0, nullptr);
+    if (SUCCEEDED(hr) && pidl) {
+        IShellFolder* parentFolder = nullptr;
+        PCUITEMID_CHILD childPidl = nullptr;
+        hr = SHBindToParent(pidl, IID_IShellFolder, (void**)&parentFolder, &childPidl);
+        if (SUCCEEDED(hr) && parentFolder) {
+            IContextMenu* contextMenu = nullptr;
+            hr = parentFolder->GetUIObjectOf(hwnd, 1, &childPidl,
+                                              IID_IContextMenu, nullptr, (void**)&contextMenu);
+            if (SUCCEEDED(hr) && contextMenu) {
+                HMENU hMenu = CreatePopupMenu();
+                if (hMenu) {
+                    hr = contextMenu->QueryContextMenu(hMenu, 0, 1, 0x7FFF,
+                                                        CMF_NORMAL | CMF_EXPLORE);
+                    if (SUCCEEDED(hr)) {
+                        // Required for TrackPopupMenu to work from non-foreground windows
+                        SetForegroundWindow(hwnd);
+
+                        POINT pt;
+                        GetCursorPos(&pt);
+                        int cmd = TrackPopupMenu(hMenu,
+                                                  TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN,
+                                                  pt.x, pt.y, 0, hwnd, nullptr);
+
+                        // Required to dismiss the menu properly (KB135788)
+                        PostMessage(hwnd, WM_NULL, 0, 0);
+
+                        if (cmd > 0) {
+                            CMINVOKECOMMANDINFO ci = {};
+                            ci.cbSize = sizeof(ci);
+                            ci.hwnd = hwnd;
+                            ci.lpVerb = MAKEINTRESOURCEA(cmd - 1);
+                            ci.nShow = SW_SHOWNORMAL;
+                            contextMenu->InvokeCommand(&ci);
+                        }
+                    }
+                    DestroyMenu(hMenu);
+                }
+                contextMenu->Release();
+            }
+            parentFolder->Release();
+        }
+        CoTaskMemFree(pidl);
+    }
+
+    if (comOwned) CoUninitialize();
+}
+#endif
+
 void Dialogs::drawContextMenuPopup(const char* popupId, FsNode* node) {
     if (ImGui::BeginPopup(popupId)) {
         if (node) {
@@ -239,6 +335,10 @@ void Dialogs::drawContextMenuPopup(const char* popupId, FsNode* node) {
                 } else {
                     ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
                 }
+            }
+
+            if (ImGui::MenuItem("Windows Context Menu")) {
+                windowsContextMenuPath_ = node->absName();
             }
 #endif
 
