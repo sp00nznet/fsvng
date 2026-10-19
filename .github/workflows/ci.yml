@@ -26,6 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # glad generates its GL loader at build time with Python + jinja2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install jinja2
+
       - name: Linux deps (SDL2 is built from source and needs the X11/Wayland headers)
         if: runner.os == 'Linux'
         run: |
